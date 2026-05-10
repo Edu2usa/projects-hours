@@ -64,7 +64,7 @@ function renderReport(input: {
   <div class="hero">
     <div class="sub">Preferred Maintenance &middot; Payroll report</div>
     <h1>Payroll ${escapeHtml(input.range.label)}</h1>
-    <div class="sub">Generated ${escapeHtml(formatDateTime(new Date()))} from Special Project Hours. Review rows kept separate. Hours kept exactly as approved.</div>
+    <div class="sub">Generated ${escapeHtml(formatDateTime(new Date()))} from Special Project Hours. Review items kept separate. Hours kept exactly as approved.</div>
     <div class="chips">
       ${metric("App total", `${allHours.toFixed(2)} hrs`)}
       ${metric("Clean releasable", `${cleanHours.toFixed(2)} hrs`)}
@@ -74,25 +74,25 @@ function renderReport(input: {
   </div>
 
   <div class="section">
-    <h2>By worker / team - clean releasable rows only</h2>
+    <h2>By worker / team - clean releasable entries only</h2>
     <div class="cards">
-      ${workerCards.length ? workerCards.map((item) => workerCard(item.name, item.hours, item.jobs, item.refs)).join("") : empty("No clean releasable rows.")}
+      ${workerCards.length ? workerCards.map((item) => workerCard(item.name, item.hours, item.jobs)).join("") : empty("No clean releasable entries.")}
     </div>
   </div>
 
   <div class="section">
     <h2>Review holds before assigning pay</h2>
     ${reviewTable(input)}
-    <p class="small">These rows stay out of clean payroll totals until the admin resolves the flags.</p>
+    <p class="small">These items stay out of clean payroll totals until the admin resolves the flags.</p>
   </div>
 
   <div class="section">
-    <h2>Unpaid entries - app rows</h2>
+    <h2>Unpaid entries</h2>
     ${entryTable(input)}
   </div>
 
   <div class="section">
-    <h2>By location - clean releasable rows only</h2>
+    <h2>By location - clean releasable entries only</h2>
     ${locationTable(locationRows)}
   </div>
 
@@ -100,10 +100,10 @@ function renderReport(input: {
     <h2>Verification</h2>
     <table class="table"><tbody>
       <tr><td>Data source</td><td>Special Project Hours Supabase app state</td></tr>
-      <tr><td>Review rows separated</td><td class="ok">Yes</td></tr>
+      <tr><td>Review items separated</td><td class="ok">Yes</td></tr>
       <tr><td>Hours used exactly as approved</td><td class="ok">Yes</td></tr>
       <tr><td>Shared hours split</td><td class="ok">No automatic splitting</td></tr>
-      <tr><td>Flagged rows held</td><td>${escapeHtml(String(input.reviewLines.length))} worker row(s)</td></tr>
+      <tr><td>Flagged items held</td><td>${escapeHtml(String(input.reviewLines.length))} worker item(s)</td></tr>
     </tbody></table>
   </div>
 
@@ -121,39 +121,38 @@ function metric(label: string, value: string) {
   return `<div class="chip"><div class="k">${escapeHtml(label)}</div><div class="v">${escapeHtml(value)}</div></div>`;
 }
 
-function workerCard(name: string, hours: number, jobs: number, refs: string[]) {
-  return `<div class="card"><h3>${escapeHtml(name)}</h3><div class="hours">${hours.toFixed(2)} hrs</div><div class="meta">${jobs} job${jobs === 1 ? "" : "s"} &middot; rows ${escapeHtml(refs.join(", "))}</div></div>`;
+function workerCard(name: string, hours: number, jobs: number) {
+  return `<div class="card"><h3>${escapeHtml(name)}</h3><div class="hours">${hours.toFixed(2)} hrs</div><div class="meta">${jobs} job${jobs === 1 ? "" : "s"}</div></div>`;
 }
 
 function reviewTable(input: { accounts: Account[]; employees: Employee[]; reviewLines: ReportLine[] }) {
   if (!input.reviewLines.length) return `<p class="small">No review holds.</p>`;
-  const rows = input.reviewLines.map(({ entry, line }) => `<tr><td>${ref(entry)}</td><td>${escapeHtml(formatShortDate(entry.workDate))}</td><td>${escapeHtml(employeeName(input.employees, line.employeeId))}</td><td>${escapeHtml(accountName(input.accounts, entry.accountId, entry.rawAccountText))}</td><td class="right">${line.approvedHours.toFixed(2)}</td><td>${escapeHtml(entry.flags.join("; ") || entry.status)}</td></tr>`).join("");
-  return `<table class="table"><thead><tr><th>Row</th><th>Date</th><th>Worker / Team</th><th>Location</th><th class="right">Hours</th><th>Reason</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const rows = input.reviewLines.map(({ entry, line }) => `<tr><td>${escapeHtml(formatShortDate(entry.workDate))}</td><td>${escapeHtml(employeeName(input.employees, line.employeeId))}</td><td>${escapeHtml(accountName(input.accounts, entry.accountId, entry.rawAccountText))}</td><td class="right">${line.approvedHours.toFixed(2)}</td><td>${escapeHtml(entry.flags.join("; ") || entry.status)}</td></tr>`).join("");
+  return `<table class="table"><thead><tr><th>Date</th><th>Worker / Team</th><th>Location</th><th class="right">Hours</th><th>Reason</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function entryTable(input: { accounts: Account[]; employees: Employee[]; services: Service[]; lines: ReportLine[] }) {
   if (!input.lines.length) return `<p class="small">No entries yet.</p>`;
-  const rows = input.lines.map(({ entry, line }) => `<tr><td>${escapeHtml(formatShortDate(entry.workDate))}</td><td>${escapeHtml(employeeName(input.employees, line.employeeId))}</td><td>${escapeHtml(accountName(input.accounts, entry.accountId, entry.rawAccountText))}</td><td class="right">${line.approvedHours.toFixed(2)}</td><td>${escapeHtml(serviceList(input.services, entry))}</td><td>${escapeHtml(entry.notes ?? "")}</td><td class="small">${ref(entry)}</td></tr>`).join("");
-  return `<table class="table"><thead><tr><th>Date</th><th>Worker / Team</th><th>Location</th><th class="right">Hours</th><th>Services</th><th>Notes</th><th>Row</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const rows = input.lines.map(({ entry, line }) => `<tr><td>${escapeHtml(formatShortDate(entry.workDate))}</td><td>${escapeHtml(employeeName(input.employees, line.employeeId))}</td><td>${escapeHtml(accountName(input.accounts, entry.accountId, entry.rawAccountText))}</td><td class="right">${line.approvedHours.toFixed(2)}</td><td>${escapeHtml(serviceList(input.services, entry))}</td><td>${escapeHtml(entry.notes ?? "")}</td></tr>`).join("");
+  return `<table class="table"><thead><tr><th>Date</th><th>Worker / Team</th><th>Location</th><th class="right">Hours</th><th>Services</th><th>Notes</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-function locationTable(rows: { name: string; hours: number; jobs: number; refs: string[] }[]) {
-  if (!rows.length) return `<p class="small">No clean releasable rows.</p>`;
-  const body = rows.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td class="right">${row.hours.toFixed(2)}</td><td class="right">${row.jobs}</td><td class="small">${escapeHtml(row.refs.join(", "))}</td></tr>`).join("");
-  return `<table class="table"><thead><tr><th>Location</th><th class="right">Hours</th><th class="right">Jobs</th><th>Rows</th></tr></thead><tbody>${body}</tbody></table>`;
+function locationTable(rows: { name: string; hours: number; jobs: number }[]) {
+  if (!rows.length) return `<p class="small">No clean releasable entries.</p>`;
+  const body = rows.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td class="right">${row.hours.toFixed(2)}</td><td class="right">${row.jobs}</td></tr>`).join("");
+  return `<table class="table"><thead><tr><th>Location</th><th class="right">Hours</th><th class="right">Jobs</th></tr></thead><tbody>${body}</tbody></table>`;
 }
 
 function groupLines(lines: ReportLine[], nameFor: (line: ReportLine) => string) {
-  const map = new Map<string, { name: string; hours: number; entries: Set<string>; refs: Set<string> }>();
+  const map = new Map<string, { name: string; hours: number; entries: Set<string> }>();
   for (const item of lines) {
     const name = nameFor(item);
-    const existing = map.get(name) ?? { name, hours: 0, entries: new Set<string>(), refs: new Set<string>() };
+    const existing = map.get(name) ?? { name, hours: 0, entries: new Set<string>() };
     existing.hours += item.line.approvedHours;
     existing.entries.add(item.entry.id);
-    existing.refs.add(ref(item.entry));
     map.set(name, existing);
   }
-  return [...map.values()].map((item) => ({ name: item.name, hours: sum([item.hours]), jobs: item.entries.size, refs: [...item.refs] }));
+  return [...map.values()].map((item) => ({ name: item.name, hours: sum([item.hours]), jobs: item.entries.size }));
 }
 
 function dateRange(entries: JobEntry[]) {
@@ -190,10 +189,6 @@ function accountName(accounts: Account[], id?: string, raw?: string) {
 function serviceList(services: Service[], entry: JobEntry) {
   const canonical = entry.serviceIds.map((serviceId) => services.find((service) => service.id === serviceId)?.label.en ?? serviceId);
   return [...canonical, entry.rawServiceText].filter(Boolean).join(", ");
-}
-
-function ref(entry: JobEntry) {
-  return entry.id.slice(0, 8);
 }
 
 function sum(values: number[]) {
