@@ -40,6 +40,14 @@ type Draft = {
 };
 
 function createEmptyDraft(): Draft {
+  return createDraft();
+}
+
+function createCrewDraft(): Draft {
+  return createDraft({ startTime: "17:00", finishTime: "21:00" });
+}
+
+function createDraft(defaults: Partial<Draft> = {}): Draft {
   return {
     accountId: "",
     rawAccountText: "",
@@ -50,7 +58,8 @@ function createEmptyDraft(): Draft {
     rawServiceText: "",
     overrideHours: "",
     overrideReason: "",
-    notes: ""
+    notes: "",
+    ...defaults
   };
 }
 
@@ -421,8 +430,9 @@ function QuickEntry({ accounts, services, draft, setDraft, language, session, su
 }
 
 function CrewEntry({ accounts, employees, services, language, session, onSubmit }: { accounts: Account[]; employees: Employee[]; services: Service[]; language: Language; session: Session; onSubmit: (entry: JobEntry) => void }) {
-  const [draft, setDraft] = useState<Draft>(() => createEmptyDraft());
+  const [draft, setDraft] = useState<Draft>(() => createCrewDraft());
   const [workerIds, setWorkerIds] = useState<string[]>([]);
+  const [workerHours, setWorkerHours] = useState<Record<string, string>>({});
   const [workerPickerId, setWorkerPickerId] = useState("");
   const [step, setStep] = useState(1);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -446,7 +456,41 @@ function CrewEntry({ accounts, employees, services, language, session, onSubmit 
 
   function removeWorker(id: string) {
     setWorkerIds((current) => current.filter((item) => item !== id));
+    setWorkerHours((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
     setFeedback(null);
+  }
+
+  function updateWorkerHours(id: string, hours: string) {
+    setWorkerHours((current) => ({ ...current, [id]: hours }));
+    setFeedback(null);
+  }
+
+  function nextStep() {
+    const selectedOtherAccount = draft.accountId === "other";
+    const hasAccount = draft.accountId && (!selectedOtherAccount || draft.rawAccountText.trim().length > 0);
+    const hasService = draft.serviceIds.filter(Boolean).length > 0 || draft.rawServiceText.trim().length > 0;
+    if (step === 1 && !hasAccount) {
+      setFeedback(t.missingAccount);
+      return;
+    }
+    if (step === 2 && (!Number.isFinite(calculated) || calculated <= 0)) {
+      setFeedback(t.invalidHours);
+      return;
+    }
+    if (step === 2 && draft.overrideHours && !draft.overrideReason.trim()) {
+      setFeedback(t.missingReason);
+      return;
+    }
+    if (step === 3 && !hasService) {
+      setFeedback(t.missingService);
+      return;
+    }
+    setFeedback(null);
+    setStep(step + 1);
   }
 
   function submit() {
@@ -479,11 +523,21 @@ function CrewEntry({ accounts, employees, services, language, session, onSubmit 
       setStep(4);
       return;
     }
+    const hasInvalidWorkerHours = workerIds.some((id) => {
+      const hours = workerHours[id];
+      return hours && (!Number.isFinite(Number(hours)) || Number(hours) <= 0);
+    });
+    if (hasInvalidWorkerHours) {
+      setFeedback(t.invalidWorkerHours);
+      setStep(4);
+      return;
+    }
+    const hasWorkerOverrides = workerIds.some((id) => Boolean(workerHours[id]));
     const flags = flagEntry({
       rawAccountText: selectedOtherAccount ? draft.rawAccountText : undefined,
       rawServiceText: draft.rawServiceText || undefined,
       workDate: draft.workDate,
-      manualOverride: Boolean(draft.overrideHours),
+      manualOverride: Boolean(draft.overrideHours) || hasWorkerOverrides,
       hours: approved
     });
     onSubmit({
@@ -500,11 +554,15 @@ function CrewEntry({ accounts, employees, services, language, session, onSubmit 
       notes: draft.notes,
       status: flags.length ? "flagged" : "approved",
       flags,
-      workerLines: workerIds.map((id) => buildLine(id, draft.startTime, draft.finishTime, approved, Boolean(draft.overrideHours), draft.overrideReason)),
+      workerLines: workerIds.map((id) => {
+        const workerApproved = workerHours[id] ? Number(workerHours[id]) : approved;
+        return buildLine(id, draft.startTime, draft.finishTime, workerApproved, Boolean(draft.overrideHours) || Boolean(workerHours[id]), workerHours[id] ? "Crew worker hour override" : draft.overrideReason);
+      }),
       createdAt: new Date().toISOString()
     });
-    setDraft(createEmptyDraft());
+    setDraft(createCrewDraft());
     setWorkerIds([]);
+    setWorkerHours({});
     setWorkerPickerId("");
     setFeedback(null);
     setStep(1);
@@ -540,7 +598,19 @@ function CrewEntry({ accounts, employees, services, language, session, onSubmit 
                 <div className="row worker-row" key={workerId}>
                   <div>
                     <strong>{index + 1}. {employee?.name ?? workerId}</strong>
-                    <div className="small muted">{draft.startTime || "--:--"} - {draft.finishTime || "--:--"} / {calculated.toFixed(1)} {t.hoursEach}</div>
+                    <div className="small muted">{draft.startTime || "--:--"} - {draft.finishTime || "--:--"} / {workerHours[workerId] || calculated.toFixed(1)} {t.hoursEach}</div>
+                  </div>
+                  <div className="worker-hours">
+                    <label className="small muted" htmlFor={`worker-hours-${workerId}`}>{t.hours}</label>
+                    <input
+                      id={`worker-hours-${workerId}`}
+                      className="input"
+                      inputMode="decimal"
+                      value={workerHours[workerId] ?? ""}
+                      onChange={(event) => updateWorkerHours(workerId, event.target.value)}
+                      placeholder={`${calculated.toFixed(1)} ${t.hoursLower}`}
+                      aria-label={`${employee?.name ?? workerId} ${t.hours}`}
+                    />
                   </div>
                   <button className="danger" onClick={() => removeWorker(workerId)} aria-label={`${t.removeWorker} ${employee?.name ?? workerId}`}>
                     <Trash2 size={18} /> {t.remove}
@@ -558,13 +628,14 @@ function CrewEntry({ accounts, employees, services, language, session, onSubmit 
             <strong>{t.review}</strong>
             <span>{accountLabel(accounts, draft.accountId, draft.rawAccountText)} / {draft.workDate}</span>
             <span>{draft.startTime} - {draft.finishTime} / {calculated} {t.hoursEach}</span>
+            <span>{t.defaultPm}</span>
             <span>{workerIds.length} {t.workers}</span>
           </div>
         </div>
       )}
       <div className="footer-actions">
         <button className="secondary" onClick={() => setStep(Math.max(1, step - 1))}>{t.back}</button>
-        {step < 4 ? <button className="primary" onClick={() => setStep(step + 1)}>{t.next}</button> : <button className="primary" onClick={submit}>{t.submitCrew}</button>}
+        {step < 4 ? <button className="primary" onClick={nextStep}>{t.next}</button> : <button className="primary" onClick={submit}>{t.submitCrew}</button>}
       </div>
     </section>
   );

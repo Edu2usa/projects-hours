@@ -373,6 +373,16 @@ button {
   align-items: center;
 }
 
+.worker-hours {
+  display: grid;
+  gap: 4px;
+  min-width: 130px;
+}
+
+.worker-hours .input {
+  min-height: 40px;
+}
+
 .checkline {
   display: inline-flex;
   align-items: center;
@@ -410,5 +420,9 @@ button {
 
   .worker-picker {
     grid-template-columns: 1fr;
+  }
+
+  .worker-hours {
+    width: 100%;
   }
 }
