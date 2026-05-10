@@ -68,10 +68,13 @@ button {
 }
 
 .brand-logo {
-  width: 46px;
+  width: 54px;
   height: 46px;
   object-fit: contain;
   flex: 0 0 auto;
+  padding: 6px;
+  border-radius: 8px;
+  background: var(--brand);
 }
 
 .brand h1 {
