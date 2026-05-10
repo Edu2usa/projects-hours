@@ -8,10 +8,40 @@ export const employees: Employee[] = [
 ];
 
 export const accounts: Account[] = [
+  { id: "100-mill-plain", canonicalName: "100 Mill Plain", active: true, isFavorite: false },
+  { id: "170-164", canonicalName: "170 / 164", active: true, isFavorite: false },
+  { id: "20-germantown", canonicalName: "20 Germantown", active: true, isFavorite: false },
+  { id: "235-main", canonicalName: "235 Main", active: true, isFavorite: false },
+  { id: "33-germantown", canonicalName: "33 Germantown", active: true, isFavorite: false },
+  { id: "79-sand-pit", canonicalName: "79 Sand Pit", active: true, isFavorite: false },
+  { id: "anns-place", canonicalName: "Ann's Place", active: true, isFavorite: false },
+  { id: "belimo", canonicalName: "Belimo", active: true, isFavorite: true },
+  { id: "branson", canonicalName: "Branson", active: true, isFavorite: false },
+  { id: "bridport-surgical", canonicalName: "Bridport Surgical", active: true, isFavorite: false },
+  { id: "ccats", canonicalName: "CCATS", active: true, isFavorite: false },
+  { id: "comm-ctr", canonicalName: "Comm Ctr", active: true, isFavorite: false },
+  { id: "davitta", canonicalName: "Davitta", active: true, isFavorite: false },
+  { id: "derm-assoc", canonicalName: "Derm Assoc", active: true, isFavorite: false },
+  { id: "dhmac", canonicalName: "DHMAC", active: true, isFavorite: false },
+  { id: "dr-cigno", canonicalName: "Dr. Cigno", active: true, isFavorite: false },
+  { id: "entegris", canonicalName: "Entegris", active: true, isFavorite: false },
+  { id: "ethan-allen", canonicalName: "Ethan Allen", active: true, isFavorite: false },
+  { id: "gl-ridgefield", canonicalName: "GL Ridgefield", active: true, isFavorite: false },
+  { id: "gold-garage", canonicalName: "Gold Garage", active: true, isFavorite: false },
+  { id: "immaculate", canonicalName: "Immaculate", active: true, isFavorite: false },
+  { id: "mannkind", canonicalName: "MannKind", active: true, isFavorite: false },
+  { id: "maplewood", canonicalName: "Maplewood", active: true, isFavorite: false },
+  { id: "mitchell-wdbry", canonicalName: "Mitchell WDBRY", active: true, isFavorite: false },
+  { id: "motion-pt", canonicalName: "Motion PT", active: true, isFavorite: false },
+  { id: "newt-rehab", canonicalName: "Newt Rehab", active: true, isFavorite: false },
+  { id: "northeast", canonicalName: "Northeast", active: true, isFavorite: false },
+  { id: "ridgefield-diagnostic", canonicalName: "Ridgefield Diagnostic", active: true, isFavorite: false },
   { id: "resonetics", canonicalName: "Resonetics", active: true, isFavorite: true },
-  { id: "labcorp", canonicalName: "Labcorp", active: true, isFavorite: true },
-  { id: "move-out", canonicalName: "Move-out Projects", active: true, isFavorite: false },
-  { id: "construction", canonicalName: "Construction Final Clean", active: true, isFavorite: false }
+  { id: "sherman-school", canonicalName: "Sherman School", active: true, isFavorite: false },
+  { id: "somers", canonicalName: "Somers", active: true, isFavorite: false },
+  { id: "urology-assoc", canonicalName: "Urology Assoc", active: true, isFavorite: false },
+  { id: "vna", canonicalName: "VNA", active: true, isFavorite: false },
+  { id: "wilton-surg", canonicalName: "Wilton Surg", active: true, isFavorite: false }
 ];
 
 export const services: Service[] = [
