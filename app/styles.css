@@ -362,6 +362,17 @@ button {
   gap: 8px;
 }
 
+.worker-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.worker-row {
+  align-items: center;
+}
+
 .checkline {
   display: inline-flex;
   align-items: center;
@@ -395,5 +406,9 @@ button {
     display: grid;
     grid-template-columns: 1fr;
     padding-bottom: 4px;
+  }
+
+  .worker-picker {
+    grid-template-columns: 1fr;
   }
 }

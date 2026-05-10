@@ -7,11 +7,14 @@ import {
   Check,
   Download,
   FileSpreadsheet,
+  FileText,
   Languages,
   LogOut,
+  Plus,
   Search,
   Send,
   ShieldCheck,
+  Trash2,
   Users
 } from "lucide-react";
 import { accounts as seedAccounts, demoEntries, employees as seedEmployees, services as seedServices } from "../lib/demo-data";
@@ -419,68 +422,143 @@ function QuickEntry({ accounts, services, draft, setDraft, language, session, su
 
 function CrewEntry({ accounts, employees, services, language, session, onSubmit }: { accounts: Account[]; employees: Employee[]; services: Service[]; language: Language; session: Session; onSubmit: (entry: JobEntry) => void }) {
   const [draft, setDraft] = useState<Draft>(() => createEmptyDraft());
-  const [workerIds, setWorkerIds] = useState<string[]>(["ramon", "maria"]);
+  const [workerIds, setWorkerIds] = useState<string[]>([]);
+  const [workerPickerId, setWorkerPickerId] = useState("");
   const [step, setStep] = useState(1);
+  const [feedback, setFeedback] = useState<string | null>(null);
   const calculated = calculateHours(draft.startTime, draft.finishTime);
   const t = copy[language];
+  const crewWorkers = employees.filter((item) => item.active && item.role !== "admin");
+  const availableWorkers = crewWorkers.filter((employee) => !workerIds.includes(employee.id));
 
-  function toggleWorker(id: string) {
-    setWorkerIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  function updateDraft(partial: Partial<Draft>) {
+    setFeedback(null);
+    setDraft({ ...draft, ...partial });
+  }
+
+  function addWorker() {
+    const nextWorkerId = workerPickerId || availableWorkers[0]?.id;
+    if (!nextWorkerId) return;
+    setWorkerIds((current) => current.includes(nextWorkerId) ? current : [...current, nextWorkerId]);
+    setWorkerPickerId("");
+    setFeedback(null);
+  }
+
+  function removeWorker(id: string) {
+    setWorkerIds((current) => current.filter((item) => item !== id));
+    setFeedback(null);
   }
 
   function submit() {
+    const selectedOtherAccount = draft.accountId === "other";
+    const hasAccount = draft.accountId && (!selectedOtherAccount || draft.rawAccountText.trim().length > 0);
+    const hasService = draft.serviceIds.filter(Boolean).length > 0 || draft.rawServiceText.trim().length > 0;
+    const approved = draft.overrideHours ? Number(draft.overrideHours) : calculated;
+    if (!hasAccount) {
+      setFeedback(t.missingAccount);
+      setStep(1);
+      return;
+    }
+    if (!Number.isFinite(approved) || approved <= 0) {
+      setFeedback(t.invalidHours);
+      setStep(2);
+      return;
+    }
+    if (draft.overrideHours && !draft.overrideReason.trim()) {
+      setFeedback(t.missingReason);
+      setStep(2);
+      return;
+    }
+    if (!hasService) {
+      setFeedback(t.missingService);
+      setStep(3);
+      return;
+    }
+    if (workerIds.length === 0) {
+      setFeedback(t.missingWorkers);
+      setStep(4);
+      return;
+    }
     const flags = flagEntry({
-      rawAccountText: draft.accountId === "other" ? draft.rawAccountText : undefined,
+      rawAccountText: selectedOtherAccount ? draft.rawAccountText : undefined,
       rawServiceText: draft.rawServiceText || undefined,
       workDate: draft.workDate,
       manualOverride: Boolean(draft.overrideHours),
-      hours: draft.overrideHours ? Number(draft.overrideHours) : calculated
+      hours: approved
     });
     onSubmit({
       id: crypto.randomUUID(),
       submittedByEmployeeId: session.employeeId,
-      accountId: draft.accountId === "other" ? undefined : draft.accountId,
-      rawAccountText: draft.accountId === "other" ? draft.rawAccountText : undefined,
+      accountId: selectedOtherAccount ? undefined : draft.accountId,
+      rawAccountText: selectedOtherAccount ? draft.rawAccountText : undefined,
       workDate: draft.workDate,
       defaultStartTime: draft.startTime,
       defaultFinishTime: draft.finishTime,
       defaultCalculatedHours: calculated,
-      serviceIds: draft.serviceIds,
+      serviceIds: draft.serviceIds.filter(Boolean),
       rawServiceText: draft.rawServiceText || undefined,
       notes: draft.notes,
       status: flags.length ? "flagged" : "approved",
       flags,
-      workerLines: workerIds.map((id) => buildLine(id, draft.startTime, draft.finishTime, draft.overrideHours ? Number(draft.overrideHours) : calculated, Boolean(draft.overrideHours), draft.overrideReason)),
+      workerLines: workerIds.map((id) => buildLine(id, draft.startTime, draft.finishTime, approved, Boolean(draft.overrideHours), draft.overrideReason)),
       createdAt: new Date().toISOString()
     });
     setDraft(createEmptyDraft());
     setWorkerIds([]);
+    setWorkerPickerId("");
+    setFeedback(null);
     setStep(1);
   }
 
   return (
     <section className="panel grid">
       <HeaderLine title={t.crew} subtitle={`${t.crewStep} ${step} / 4`} right={<span className="badge">{workerIds.length} {t.workers}</span>} />
-      {step === 1 && <AccountFields accounts={accounts} draft={draft} update={(partial) => setDraft({ ...draft, ...partial })} language={language} />}
-      {step === 2 && <TimeFields draft={draft} update={(partial) => setDraft({ ...draft, ...partial })} calculated={calculated} language={language} />}
-      {step === 3 && <ServiceFields services={services} draft={draft} update={(partial) => setDraft({ ...draft, ...partial })} language={language} />}
+      {feedback && (
+        <div className="feedback-banner error" role="status" aria-live="polite">
+          <AlertTriangle size={18} />
+          <span>{feedback}</span>
+        </div>
+      )}
+      {step === 1 && <AccountFields accounts={accounts} draft={draft} update={updateDraft} language={language} />}
+      {step === 2 && <TimeFields draft={draft} update={updateDraft} calculated={calculated} language={language} />}
+      {step === 3 && <ServiceFields services={services} draft={draft} update={updateDraft} language={language} />}
       {step === 4 && (
         <div className="grid">
-          <div className="grid two">
-            {employees.filter((item) => item.active && item.role !== "admin").map((employee) => (
-              <button key={employee.id} className={`chip ${workerIds.includes(employee.id) ? "active" : ""}`} aria-pressed={workerIds.includes(employee.id)} onClick={() => toggleWorker(employee.id)}>
-                {workerIds.includes(employee.id) && <Check size={16} />} {employee.name}
-              </button>
-            ))}
+          <div className="worker-picker">
+            <select className="select" value={workerPickerId} onChange={(event) => setWorkerPickerId(event.target.value)} aria-label={t.selectWorker}>
+              <option value="">{availableWorkers.length ? t.selectWorker : t.allWorkersAdded}</option>
+              {availableWorkers.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}
+            </select>
+            <button className="primary" onClick={addWorker} disabled={availableWorkers.length === 0}>
+              <Plus size={18} /> {t.addWorker}
+            </button>
+          </div>
+          <div className="list">
+            {workerIds.map((workerId, index) => {
+              const employee = crewWorkers.find((item) => item.id === workerId);
+              return (
+                <div className="row worker-row" key={workerId}>
+                  <div>
+                    <strong>{index + 1}. {employee?.name ?? workerId}</strong>
+                    <div className="small muted">{draft.startTime || "--:--"} - {draft.finishTime || "--:--"} / {calculated.toFixed(1)} {t.hoursEach}</div>
+                  </div>
+                  <button className="danger" onClick={() => removeWorker(workerId)} aria-label={`${t.removeWorker} ${employee?.name ?? workerId}`}>
+                    <Trash2 size={18} /> {t.remove}
+                  </button>
+                </div>
+              );
+            })}
+            {workerIds.length === 0 && <p className="muted">{t.noWorkersSelected}</p>}
           </div>
           <div className="field">
             <label>{t.notes}</label>
-            <textarea className="textarea" value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} />
+            <textarea className="textarea" value={draft.notes} onChange={(event) => updateDraft({ notes: event.target.value })} />
           </div>
           <div className="card list">
             <strong>{t.review}</strong>
             <span>{accountLabel(accounts, draft.accountId, draft.rawAccountText)} / {draft.workDate}</span>
             <span>{draft.startTime} - {draft.finishTime} / {calculated} {t.hoursEach}</span>
+            <span>{workerIds.length} {t.workers}</span>
           </div>
         </div>
       )}
@@ -622,6 +700,7 @@ function AdminDashboard({ entries, setEntries, accounts, setAccounts, employees,
           subtitle="Resolve flags, classify REG/OT/DT, then export."
           right={
             <div className="segmented">
+              <a className="secondary" href="/api/export/report" target="_blank" rel="noreferrer"><FileText size={18} /> Report</a>
               <a className="secondary" href="/api/export/excel"><FileSpreadsheet size={18} /> Excel</a>
               <a className="secondary" href="/api/export/pdf"><Download size={18} /> PDF</a>
             </div>
