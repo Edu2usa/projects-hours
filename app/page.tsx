@@ -187,7 +187,7 @@ function Shell({ children, language, onLanguage, right }: { children: React.Reac
     <div className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark">PM</div>
+          <img className="brand-logo" src="/preferred-maintenance-logo.png" alt="Preferred Maintenance logo" />
           <div>
             <h1>Special Project Hours</h1>
             <span>Preferred Maintenance</span>

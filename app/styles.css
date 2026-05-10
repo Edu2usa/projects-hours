@@ -67,15 +67,11 @@ button {
   min-width: 0;
 }
 
-.brand-mark {
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  border-radius: 8px;
-  background: var(--brand);
-  color: var(--brand-2);
-  font-weight: 800;
+.brand-logo {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  flex: 0 0 auto;
 }
 
 .brand h1 {
