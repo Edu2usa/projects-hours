@@ -16,13 +16,13 @@ export const accounts: Account[] = [
 
 export const services: Service[] = [
   { id: "floor-cleaning", canonicalKey: "floor_cleaning", label: { en: "Floor cleaning", es: "Pisos", pt: "Pisos" }, active: true, isCommon: true },
-  { id: "strip-wax", canonicalKey: "strip_wax", label: { en: "Strip/wax", es: "Strip/wax", pt: "Strip/wax" }, active: true, isCommon: true },
+  { id: "strip-wax", canonicalKey: "strip_wax", label: { en: "Strip/wax", es: "Decapado/encerado", pt: "Remover/encerar" }, active: true, isCommon: true },
   { id: "carpet", canonicalKey: "carpet_shampoo", label: { en: "Carpet shampoo", es: "Alfombras", pt: "Carpetes" }, active: true, isCommon: true },
   { id: "windows", canonicalKey: "windows_glass", label: { en: "Windows/glass", es: "Ventanas", pt: "Vidros" }, active: true, isCommon: true },
-  { id: "bathrooms", canonicalKey: "bathrooms", label: { en: "Bathrooms", es: "Banos", pt: "Banheiros" }, active: true, isCommon: true },
+  { id: "bathrooms", canonicalKey: "bathrooms", label: { en: "Bathrooms", es: "Baños", pt: "Banheiros" }, active: true, isCommon: true },
   { id: "final-clean", canonicalKey: "final_construction_cleaning", label: { en: "Final construction cleaning", es: "Final de obra", pt: "Final de obra" }, active: true, isCommon: false },
-  { id: "moving", canonicalKey: "moving_setup", label: { en: "Moving/setup", es: "Mudanza", pt: "Mudanca" }, active: true, isCommon: false },
-  { id: "dusting", canonicalKey: "dusting_high_dusting", label: { en: "Dusting/high dusting", es: "Polvo alto", pt: "Po alto" }, active: true, isCommon: false },
+  { id: "moving", canonicalKey: "moving_setup", label: { en: "Moving/setup", es: "Mudanza", pt: "Mudança" }, active: true, isCommon: false },
+  { id: "dusting", canonicalKey: "dusting_high_dusting", label: { en: "Dusting/high dusting", es: "Polvo alto", pt: "Pó alto" }, active: true, isCommon: false },
   { id: "emergency", canonicalKey: "emergency_cleanup", label: { en: "Emergency cleanup", es: "Emergencia", pt: "Emergencia" }, active: true, isCommon: false }
 ];
 

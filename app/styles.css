@@ -288,13 +288,33 @@ button {
   font-weight: 700;
 }
 
+.feedback-banner,
+.demo-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.feedback-banner.success,
+.demo-note {
+  border: 1px solid #b9d8ca;
+  background: #edf8f1;
+  color: var(--good);
+}
+
+.feedback-banner.error {
+  border: 1px solid #e6b8ad;
+  background: #fff4f1;
+  color: var(--bad);
+}
+
 .footer-actions {
-  position: sticky;
-  bottom: 0;
   display: flex;
   gap: 10px;
-  padding: 12px 0 0;
-  background: linear-gradient(transparent, var(--paper) 28%);
+  padding: 8px 0 0;
+  background: transparent;
 }
 
 .footer-actions button {
@@ -330,5 +350,12 @@ button {
   .row {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .footer-actions {
+    position: static;
+    display: grid;
+    grid-template-columns: 1fr;
+    padding-bottom: 4px;
   }
 }

@@ -9,8 +9,6 @@ import {
   FileSpreadsheet,
   Languages,
   LogOut,
-  MapPin,
-  Plus,
   Search,
   Send,
   ShieldCheck,
@@ -112,7 +110,7 @@ export default function Home() {
     clearDraft();
     setDraft(createEmptyDraft());
     const totalHours = entry.workerLines.reduce((sum, line) => sum + line.approvedHours, 0);
-    setSubmitNotice(`${accountLabel(entry.accountId, entry.rawAccountText)} / ${entry.workDate} / ${totalHours.toFixed(1)} hours`);
+    setSubmitNotice(`${accountLabel(entry.accountId, entry.rawAccountText)} / ${entry.workDate} / ${totalHours.toFixed(1)} ${t.hoursLower}`);
   }
 
   if (!session) {
@@ -241,15 +239,15 @@ function Login({ language, onLogin }: { language: Language; onLogin: (session: S
           </select>
         </div>
         <div className="field">
-          <label>{adminMode ? "Admin PIN" : t.pin}</label>
+          <label>{adminMode ? t.adminPin : t.pin}</label>
           <input className="input" value={pin} onChange={(event) => setPin(event.target.value)} inputMode="numeric" maxLength={adminMode ? 12 : 4} type="password" />
         </div>
         <div className="segmented">
-          <button className={`chip ${!adminMode ? "active" : ""}`} onClick={() => setAdminMode(false)}>Employee</button>
-          <button className={`chip ${adminMode ? "active" : ""}`} onClick={() => setAdminMode(true)}>Admin</button>
+          <button className={`chip ${!adminMode ? "active" : ""}`} aria-pressed={!adminMode} onClick={() => setAdminMode(false)}>{t.employeeMode}</button>
+          <button className={`chip ${adminMode ? "active" : ""}`} aria-pressed={adminMode} onClick={() => setAdminMode(true)}>{t.adminMode}</button>
         </div>
         <button className="primary" onClick={submit}>{t.signIn}</button>
-        <p className="small muted">PINs are validated server-side after Supabase is connected. This preview stores a local session only.</p>
+        <p className="demo-note small">{t.demoAuth}</p>
       </section>
     </main>
   );
@@ -266,6 +264,7 @@ function QuickEntry({ draft, setDraft, language, session, submitNotice, onEdit, 
   onSubmit: (entry: JobEntry) => void;
 }) {
   const t = copy[language];
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const calculated = calculateHours(draft.startTime, draft.finishTime);
   const approved = draft.overrideHours ? Number(draft.overrideHours) : calculated;
   const selectedOtherAccount = draft.accountId === "other";
@@ -279,10 +278,34 @@ function QuickEntry({ draft, setDraft, language, session, submitNotice, onEdit, 
 
   function update(partial: Partial<Draft>) {
     if (submitNotice) onEdit();
+    if (feedback) setFeedback(null);
     setDraft({ ...draft, ...partial });
   }
 
+  function saveCurrentDraft() {
+    onSaveDraft();
+    setFeedback({ type: "success", text: navigator.onLine ? t.draftSaved : t.offlineDraftSaved });
+  }
+
   function submit() {
+    const hasAccount = draft.accountId && (!selectedOtherAccount || draft.rawAccountText.trim().length > 0);
+    const hasService = draft.serviceIds.filter(Boolean).length > 0 || draft.rawServiceText.trim().length > 0;
+    if (!hasAccount) {
+      setFeedback({ type: "error", text: t.missingAccount });
+      return;
+    }
+    if (!hasService) {
+      setFeedback({ type: "error", text: t.missingService });
+      return;
+    }
+    if (!Number.isFinite(approved) || approved <= 0) {
+      setFeedback({ type: "error", text: t.invalidHours });
+      return;
+    }
+    if (draft.overrideHours && !draft.overrideReason.trim()) {
+      setFeedback({ type: "error", text: t.missingReason });
+      return;
+    }
     const workerLine = buildLine(session.employeeId, draft.startTime, draft.finishTime, approved, Boolean(draft.overrideHours), draft.overrideReason);
     onSubmit({
       id: crypto.randomUUID(),
@@ -305,7 +328,7 @@ function QuickEntry({ draft, setDraft, language, session, submitNotice, onEdit, 
 
   return (
     <section className="panel grid">
-      <HeaderLine title={t.quick} subtitle="Clean one-worker submission" right={<span className={`badge ${flags.length ? "warn" : ""}`}>{flags.length ? `${flags.length} flags` : "Clean"}</span>} />
+      <HeaderLine title={t.quick} subtitle={t.quickSubtitle} right={<span className={`badge ${flags.length ? "warn" : ""}`}>{flags.length ? `${flags.length} ${t.flags.toLowerCase()}` : t.clean}</span>} />
       {submitNotice && (
         <div className="success-banner" role="status" aria-live="polite">
           <Check size={20} />
@@ -314,6 +337,12 @@ function QuickEntry({ draft, setDraft, language, session, submitNotice, onEdit, 
             <span>{submitNotice}</span>
             <small>{t.readyNext}</small>
           </div>
+        </div>
+      )}
+      {feedback && (
+        <div className={`feedback-banner ${feedback.type}`} role="status" aria-live="polite">
+          {feedback.type === "success" ? <Check size={18} /> : <AlertTriangle size={18} />}
+          <span>{feedback.text}</span>
         </div>
       )}
       <AccountFields draft={draft} update={update} language={language} />
@@ -329,8 +358,8 @@ function QuickEntry({ draft, setDraft, language, session, submitNotice, onEdit, 
         </div>
       )}
       <div className="footer-actions">
-        <button className="secondary" onClick={onSaveDraft}>{t.saveDraft}</button>
-        <button className="primary" onClick={submit} disabled={Boolean(draft.overrideHours && !draft.overrideReason)}>{t.submit}</button>
+        <button className="secondary" onClick={saveCurrentDraft}>{t.saveDraft}</button>
+        <button className="primary" onClick={submit}>{t.submit}</button>
       </div>
     </section>
   );
@@ -379,7 +408,7 @@ function CrewEntry({ language, session, onSubmit }: { language: Language; sessio
 
   return (
     <section className="panel grid">
-      <HeaderLine title={t.crew} subtitle={`Step ${step} of 4`} right={<span className="badge">{workerIds.length} workers</span>} />
+      <HeaderLine title={t.crew} subtitle={`${t.crewStep} ${step} / 4`} right={<span className="badge">{workerIds.length} {t.workers}</span>} />
       {step === 1 && <AccountFields draft={draft} update={(partial) => setDraft({ ...draft, ...partial })} language={language} />}
       {step === 2 && <TimeFields draft={draft} update={(partial) => setDraft({ ...draft, ...partial })} calculated={calculated} language={language} />}
       {step === 3 && <ServiceFields draft={draft} update={(partial) => setDraft({ ...draft, ...partial })} language={language} />}
@@ -387,7 +416,7 @@ function CrewEntry({ language, session, onSubmit }: { language: Language; sessio
         <div className="grid">
           <div className="grid two">
             {employees.filter((item) => item.role !== "admin").map((employee) => (
-              <button key={employee.id} className={`chip ${workerIds.includes(employee.id) ? "active" : ""}`} onClick={() => toggleWorker(employee.id)}>
+              <button key={employee.id} className={`chip ${workerIds.includes(employee.id) ? "active" : ""}`} aria-pressed={workerIds.includes(employee.id)} onClick={() => toggleWorker(employee.id)}>
                 {workerIds.includes(employee.id) && <Check size={16} />} {employee.name}
               </button>
             ))}
@@ -397,15 +426,15 @@ function CrewEntry({ language, session, onSubmit }: { language: Language; sessio
             <textarea className="textarea" value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} />
           </div>
           <div className="card list">
-            <strong>Review</strong>
+            <strong>{t.review}</strong>
             <span>{accountLabel(draft.accountId, draft.rawAccountText)} / {draft.workDate}</span>
-            <span>{draft.startTime} - {draft.finishTime} / {calculated} hours each</span>
+            <span>{draft.startTime} - {draft.finishTime} / {calculated} {t.hoursEach}</span>
           </div>
         </div>
       )}
       <div className="footer-actions">
-        <button className="secondary" onClick={() => setStep(Math.max(1, step - 1))}>Back</button>
-        {step < 4 ? <button className="primary" onClick={() => setStep(step + 1)}>Next</button> : <button className="primary" onClick={submit}>Submit crew job</button>}
+        <button className="secondary" onClick={() => setStep(Math.max(1, step - 1))}>{t.back}</button>
+        {step < 4 ? <button className="primary" onClick={() => setStep(step + 1)}>{t.next}</button> : <button className="primary" onClick={submit}>{t.submitCrew}</button>}
       </div>
     </section>
   );
@@ -418,9 +447,9 @@ function AccountFields({ draft, update, language }: { draft: Draft; update: (par
       <div className="field">
         <label>{t.account}</label>
         <select className="select" value={draft.accountId} onChange={(event) => update({ accountId: event.target.value })}>
-          {accounts.filter((account) => account.isFavorite).map((account) => <option key={account.id} value={account.id}>★ {account.canonicalName}</option>)}
+          {accounts.filter((account) => account.isFavorite).map((account) => <option key={account.id} value={account.id}>Favorite - {account.canonicalName}</option>)}
           {accounts.filter((account) => !account.isFavorite).map((account) => <option key={account.id} value={account.id}>{account.canonicalName}</option>)}
-          <option value="other">Other / cleanup needed</option>
+          <option value="other">{t.otherCleanup}</option>
         </select>
       </div>
       {draft.accountId === "other" && (
@@ -443,7 +472,7 @@ function TimeFields({ draft, update, calculated, language }: { draft: Draft; upd
       </div>
       <div className="field">
         <label>{t.hours}</label>
-        <input className="input" value={`${draft.overrideHours || calculated} hours`} readOnly />
+        <input className="input" aria-label={t.hours} value={`${draft.overrideHours || calculated} ${t.hoursLower}`} readOnly />
       </div>
       <div className="field">
         <label>{t.start}</label>
@@ -455,11 +484,11 @@ function TimeFields({ draft, update, calculated, language }: { draft: Draft; upd
       </div>
       <div className="field">
         <label>{t.override}</label>
-        <input className="input" inputMode="decimal" value={draft.overrideHours} onChange={(event) => update({ overrideHours: event.target.value })} placeholder="Optional" />
+        <input className="input" inputMode="decimal" value={draft.overrideHours} onChange={(event) => update({ overrideHours: event.target.value })} placeholder={t.optional} aria-label={t.override} />
       </div>
       <div className="field">
         <label>{t.reason}</label>
-        <input className="input" value={draft.overrideReason} onChange={(event) => update({ overrideReason: event.target.value })} disabled={!draft.overrideHours} />
+        <input className="input" value={draft.overrideReason} onChange={(event) => update({ overrideReason: event.target.value })} disabled={!draft.overrideHours} aria-label={t.reason} />
       </div>
     </div>
   );
@@ -475,14 +504,14 @@ function ServiceFields({ draft, update, language }: { draft: Draft; update: (par
       <label className="muted small">{t.service}</label>
       <div className="segmented">
         {services.map((service) => (
-          <button key={service.id} className={`chip ${draft.serviceIds.includes(service.id) ? "active" : ""}`} onClick={() => toggleService(service.id)}>
-            {service.isCommon ? <Plus size={16} /> : <Search size={16} />} {service.label[language]}
+          <button key={service.id} className={`chip ${draft.serviceIds.includes(service.id) ? "active" : ""}`} aria-pressed={draft.serviceIds.includes(service.id)} onClick={() => toggleService(service.id)}>
+            {draft.serviceIds.includes(service.id) ? <Check size={16} /> : <Search size={16} />} {service.label[language]}
           </button>
         ))}
       </div>
       <div className="field">
         <label>{t.otherService}</label>
-        <input className="input" value={draft.rawServiceText} onChange={(event) => update({ rawServiceText: event.target.value })} placeholder="Optional" />
+        <input className="input" value={draft.rawServiceText} onChange={(event) => update({ rawServiceText: event.target.value })} placeholder={t.optional} aria-label={t.otherService} />
       </div>
     </div>
   );
@@ -491,7 +520,7 @@ function ServiceFields({ draft, update, language }: { draft: Draft; update: (par
 function RecentEntries({ entries, language, employeeId }: { entries: JobEntry[]; language: Language; employeeId: string }) {
   return (
     <section className="panel grid">
-      <HeaderLine title={copy[language].recent} subtitle="Own submissions and correction requests" />
+      <HeaderLine title={copy[language].recent} subtitle={copy[language].recentSubtitle} />
       <div className="list">
         {entries.map((entry) => {
           const line = entry.workerLines.find((item) => item.employeeId === employeeId);
@@ -499,9 +528,9 @@ function RecentEntries({ entries, language, employeeId }: { entries: JobEntry[];
             <div className="row" key={entry.id}>
               <div>
                 <strong>{accountLabel(entry.accountId, entry.rawAccountText)}</strong>
-                <div className="small muted">{entry.workDate} / {line?.approvedHours ?? entry.defaultCalculatedHours} hours</div>
+                <div className="small muted">{entry.workDate} / {line?.approvedHours ?? entry.defaultCalculatedHours} {copy[language].hoursLower}</div>
               </div>
-              <span className={`badge ${entry.flags.length ? "warn" : ""}`}>{entry.flags.length ? "Needs review" : "Approved"}</span>
+              <span className={`badge ${entry.flags.length ? "warn" : ""}`}>{entry.flags.length ? copy[language].needsReview : copy[language].approved}</span>
             </div>
           );
         })}
