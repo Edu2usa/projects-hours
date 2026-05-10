@@ -14,11 +14,11 @@ import {
   ShieldCheck,
   Users
 } from "lucide-react";
-import { accounts, demoEntries, employees, services } from "../lib/demo-data";
+import { accounts as seedAccounts, demoEntries, employees, services } from "../lib/demo-data";
 import { calculateHours, flagEntry } from "../lib/hours";
 import { copy, languages } from "../lib/i18n";
-import { clearDraft, clearSession, loadDraft, loadEntries, loadSession, saveDraft, saveEntries, saveSession } from "../lib/storage";
-import type { JobEntry, Language, Session, WorkerLine } from "../lib/types";
+import { clearDraft, clearSession, loadAccounts, loadDraft, loadEntries, loadSession, saveAccounts, saveDraft, saveEntries, saveSession } from "../lib/storage";
+import type { Account, JobEntry, Language, Session, WorkerLine } from "../lib/types";
 
 type Screen = "quick" | "crew" | "recent" | "admin";
 
@@ -37,7 +37,7 @@ type Draft = {
 
 function createEmptyDraft(): Draft {
   return {
-    accountId: accounts[0]?.id ?? "",
+    accountId: seedAccounts[0]?.id ?? "",
     rawAccountText: "",
     workDate: new Date().toISOString().slice(0, 10),
     startTime: "17:00",
@@ -55,12 +55,14 @@ export default function Home() {
   const [language, setLanguage] = useState<Language>("en");
   const [screen, setScreen] = useState<Screen>("quick");
   const [entries, setEntries] = useState<JobEntry[]>(demoEntries);
+  const [accountList, setAccountList] = useState<Account[]>(seedAccounts);
   const [draft, setDraft] = useState<Draft>(() => createEmptyDraft());
   const [submitNotice, setSubmitNotice] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
 
   useEffect(() => {
     setEntries(loadEntries(demoEntries));
+    setAccountList(loadAccounts(seedAccounts));
     const savedSession = loadSession();
     const savedDraft = loadDraft<Draft>();
     if (savedSession) {
@@ -84,7 +86,7 @@ export default function Home() {
   const currentEmployee = employees.find((employee) => employee.id === session?.employeeId);
   const employeeEntries = entries.filter((entry) => entry.workerLines.some((line) => line.employeeId === session?.employeeId));
   const flaggedEntries = entries.filter((entry) => entry.flags.length || entry.status !== "approved");
-  const totals = useMemo(() => summarize(entries), [entries]);
+  const totals = useMemo(() => summarize(entries, accountList), [entries, accountList]);
 
   function cycleLanguage() {
     const current = languages.findIndex((item) => item.code === language);
@@ -110,7 +112,7 @@ export default function Home() {
     clearDraft();
     setDraft(createEmptyDraft());
     const totalHours = entry.workerLines.reduce((sum, line) => sum + line.approvedHours, 0);
-    setSubmitNotice(`${accountLabel(entry.accountId, entry.rawAccountText)} / ${entry.workDate} / ${totalHours.toFixed(1)} ${t.hoursLower}`);
+    setSubmitNotice(`${accountLabel(accountList, entry.accountId, entry.rawAccountText)} / ${entry.workDate} / ${totalHours.toFixed(1)} ${t.hoursLower}`);
   }
 
   if (!session) {
@@ -161,6 +163,7 @@ export default function Home() {
 
         {screen === "quick" && (
           <QuickEntry
+            accounts={accountList}
             draft={draft}
             setDraft={setDraft}
             language={language}
@@ -172,13 +175,20 @@ export default function Home() {
           />
         )}
         {screen === "crew" && (
-          <CrewEntry language={language} session={session} onSubmit={(entry) => persistEntry(entry)} />
+          <CrewEntry accounts={accountList} language={language} session={session} onSubmit={(entry) => persistEntry(entry)} />
         )}
         {screen === "recent" && (
-          <RecentEntries entries={employeeEntries} language={language} employeeId={session.employeeId} />
+          <RecentEntries entries={employeeEntries} accounts={accountList} language={language} employeeId={session.employeeId} />
         )}
         {screen === "admin" && currentEmployee?.role === "admin" && (
-          <AdminDashboard entries={entries} setEntries={(next) => { setEntries(next); saveEntries(next); }} totals={totals} flaggedEntries={flaggedEntries} />
+          <AdminDashboard
+            entries={entries}
+            setEntries={(next) => { setEntries(next); saveEntries(next); }}
+            accounts={accountList}
+            setAccounts={(next) => { setAccountList(next); saveAccounts(next); }}
+            totals={totals}
+            flaggedEntries={flaggedEntries}
+          />
         )}
       </main>
     </Shell>
@@ -253,7 +263,8 @@ function Login({ language, onLogin }: { language: Language; onLogin: (session: S
   );
 }
 
-function QuickEntry({ draft, setDraft, language, session, submitNotice, onEdit, onSaveDraft, onSubmit }: {
+function QuickEntry({ accounts, draft, setDraft, language, session, submitNotice, onEdit, onSaveDraft, onSubmit }: {
+  accounts: Account[];
   draft: Draft;
   setDraft: (draft: Draft) => void;
   language: Language;
@@ -345,7 +356,7 @@ function QuickEntry({ draft, setDraft, language, session, submitNotice, onEdit, 
           <span>{feedback.text}</span>
         </div>
       )}
-      <AccountFields draft={draft} update={update} language={language} />
+      <AccountFields accounts={accounts} draft={draft} update={update} language={language} />
       <TimeFields draft={draft} update={update} calculated={calculated} language={language} />
       <ServiceFields draft={draft} update={update} language={language} />
       <div className="field">
@@ -365,7 +376,7 @@ function QuickEntry({ draft, setDraft, language, session, submitNotice, onEdit, 
   );
 }
 
-function CrewEntry({ language, session, onSubmit }: { language: Language; session: Session; onSubmit: (entry: JobEntry) => void }) {
+function CrewEntry({ accounts, language, session, onSubmit }: { accounts: Account[]; language: Language; session: Session; onSubmit: (entry: JobEntry) => void }) {
   const [draft, setDraft] = useState<Draft>(() => createEmptyDraft());
   const [workerIds, setWorkerIds] = useState<string[]>(["ramon", "maria"]);
   const [step, setStep] = useState(1);
@@ -409,7 +420,7 @@ function CrewEntry({ language, session, onSubmit }: { language: Language; sessio
   return (
     <section className="panel grid">
       <HeaderLine title={t.crew} subtitle={`${t.crewStep} ${step} / 4`} right={<span className="badge">{workerIds.length} {t.workers}</span>} />
-      {step === 1 && <AccountFields draft={draft} update={(partial) => setDraft({ ...draft, ...partial })} language={language} />}
+      {step === 1 && <AccountFields accounts={accounts} draft={draft} update={(partial) => setDraft({ ...draft, ...partial })} language={language} />}
       {step === 2 && <TimeFields draft={draft} update={(partial) => setDraft({ ...draft, ...partial })} calculated={calculated} language={language} />}
       {step === 3 && <ServiceFields draft={draft} update={(partial) => setDraft({ ...draft, ...partial })} language={language} />}
       {step === 4 && (
@@ -427,7 +438,7 @@ function CrewEntry({ language, session, onSubmit }: { language: Language; sessio
           </div>
           <div className="card list">
             <strong>{t.review}</strong>
-            <span>{accountLabel(draft.accountId, draft.rawAccountText)} / {draft.workDate}</span>
+            <span>{accountLabel(accounts, draft.accountId, draft.rawAccountText)} / {draft.workDate}</span>
             <span>{draft.startTime} - {draft.finishTime} / {calculated} {t.hoursEach}</span>
           </div>
         </div>
@@ -440,15 +451,16 @@ function CrewEntry({ language, session, onSubmit }: { language: Language; sessio
   );
 }
 
-function AccountFields({ draft, update, language }: { draft: Draft; update: (partial: Partial<Draft>) => void; language: Language }) {
+function AccountFields({ accounts, draft, update, language }: { accounts: Account[]; draft: Draft; update: (partial: Partial<Draft>) => void; language: Language }) {
   const t = copy[language];
+  const activeAccounts = accounts.filter((account) => account.active);
   return (
     <div className="grid">
       <div className="field">
         <label>{t.account}</label>
         <select className="select" value={draft.accountId} onChange={(event) => update({ accountId: event.target.value })}>
-          {accounts.filter((account) => account.isFavorite).map((account) => <option key={account.id} value={account.id}>Favorite - {account.canonicalName}</option>)}
-          {accounts.filter((account) => !account.isFavorite).map((account) => <option key={account.id} value={account.id}>{account.canonicalName}</option>)}
+          {activeAccounts.filter((account) => account.isFavorite).map((account) => <option key={account.id} value={account.id}>Favorite - {account.canonicalName}</option>)}
+          {activeAccounts.filter((account) => !account.isFavorite).map((account) => <option key={account.id} value={account.id}>{account.canonicalName}</option>)}
           <option value="other">{t.otherCleanup}</option>
         </select>
       </div>
@@ -517,7 +529,7 @@ function ServiceFields({ draft, update, language }: { draft: Draft; update: (par
   );
 }
 
-function RecentEntries({ entries, language, employeeId }: { entries: JobEntry[]; language: Language; employeeId: string }) {
+function RecentEntries({ entries, accounts, language, employeeId }: { entries: JobEntry[]; accounts: Account[]; language: Language; employeeId: string }) {
   return (
     <section className="panel grid">
       <HeaderLine title={copy[language].recent} subtitle={copy[language].recentSubtitle} />
@@ -527,7 +539,7 @@ function RecentEntries({ entries, language, employeeId }: { entries: JobEntry[];
           return (
             <div className="row" key={entry.id}>
               <div>
-                <strong>{accountLabel(entry.accountId, entry.rawAccountText)}</strong>
+                <strong>{accountLabel(accounts, entry.accountId, entry.rawAccountText)}</strong>
                 <div className="small muted">{entry.workDate} / {line?.approvedHours ?? entry.defaultCalculatedHours} {copy[language].hoursLower}</div>
               </div>
               <span className={`badge ${entry.flags.length ? "warn" : ""}`}>{entry.flags.length ? copy[language].needsReview : copy[language].approved}</span>
@@ -539,7 +551,14 @@ function RecentEntries({ entries, language, employeeId }: { entries: JobEntry[];
   );
 }
 
-function AdminDashboard({ entries, setEntries, totals, flaggedEntries }: { entries: JobEntry[]; setEntries: (entries: JobEntry[]) => void; totals: ReturnType<typeof summarize>; flaggedEntries: JobEntry[] }) {
+function AdminDashboard({ entries, setEntries, accounts, setAccounts, totals, flaggedEntries }: {
+  entries: JobEntry[];
+  setEntries: (entries: JobEntry[]) => void;
+  accounts: Account[];
+  setAccounts: (accounts: Account[]) => void;
+  totals: ReturnType<typeof summarize>;
+  flaggedEntries: JobEntry[];
+}) {
   function resolve(entryId: string) {
     setEntries(entries.map((entry) => entry.id === entryId ? { ...entry, status: "approved", flags: [] } : entry));
   }
@@ -574,7 +593,7 @@ function AdminDashboard({ entries, setEntries, totals, flaggedEntries }: { entri
           {flaggedEntries.map((entry) => (
             <div className="row" key={entry.id}>
               <div>
-                <strong>{accountLabel(entry.accountId, entry.rawAccountText)}</strong>
+                <strong>{accountLabel(accounts, entry.accountId, entry.rawAccountText)}</strong>
                 <div className="small muted">{entry.workDate} / {entry.flags.join(", ")}</div>
               </div>
               <button className="secondary" onClick={() => resolve(entry.id)}>Resolve</button>
@@ -584,15 +603,153 @@ function AdminDashboard({ entries, setEntries, totals, flaggedEntries }: { entri
         </div>
       </div>
       <div className="panel grid">
-        <HeaderLine title="Master data" subtitle="Seeded employees, accounts/sites, and services" />
+        <HeaderLine title="Master data" subtitle="Seeded employees, customer/accounts, and services" />
         <div className="grid three">
           <ReportList title="Employees" rows={employees.map((employee) => ({ label: employee.name, value: employee.role }))} />
-          <ReportList title="Accounts" rows={accounts.map((account) => ({ label: account.canonicalName, value: account.isFavorite ? "Favorite" : "Active" }))} />
+          <AccountManager accounts={accounts} setAccounts={setAccounts} entries={entries} />
           <ReportList title="Services" rows={services.map((service) => ({ label: service.label.en, value: service.isCommon ? "Common" : "Full list" }))} />
         </div>
       </div>
     </section>
   );
+}
+
+function AccountManager({ accounts, setAccounts, entries }: { accounts: Account[]; setAccounts: (accounts: Account[]) => void; entries: JobEntry[] }) {
+  const [newName, setNewName] = useState("");
+  const [newFavorite, setNewFavorite] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editFavorite, setEditFavorite] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const sortedAccounts = [...accounts].sort((left, right) => Number(right.active) - Number(left.active) || left.canonicalName.localeCompare(right.canonicalName));
+
+  function nameExists(name: string, exceptId?: string) {
+    const normalized = normalizeName(name);
+    return accounts.some((account) => account.id !== exceptId && normalizeName(account.canonicalName) === normalized);
+  }
+
+  function addAccount() {
+    const canonicalName = newName.trim();
+    if (!canonicalName) {
+      setNotice("Enter a customer name before adding it.");
+      return;
+    }
+    if (nameExists(canonicalName)) {
+      setNotice("That customer name already exists.");
+      return;
+    }
+    const nextAccount: Account = {
+      id: uniqueAccountId(canonicalName, accounts),
+      canonicalName,
+      active: true,
+      isFavorite: newFavorite
+    };
+    setAccounts([...accounts, nextAccount]);
+    setNewName("");
+    setNewFavorite(false);
+    setNotice(`Added ${canonicalName}.`);
+  }
+
+  function startEdit(account: Account) {
+    setEditingId(account.id);
+    setEditName(account.canonicalName);
+    setEditFavorite(account.isFavorite);
+    setNotice(null);
+  }
+
+  function saveEdit(accountId: string) {
+    const canonicalName = editName.trim();
+    if (!canonicalName) {
+      setNotice("Customer name cannot be blank.");
+      return;
+    }
+    if (nameExists(canonicalName, accountId)) {
+      setNotice("Another customer already uses that name.");
+      return;
+    }
+    setAccounts(accounts.map((account) => account.id === accountId ? { ...account, canonicalName, isFavorite: editFavorite, active: true } : account));
+    setEditingId(null);
+    setEditName("");
+    setNotice(`Updated ${canonicalName}.`);
+  }
+
+  function deleteAccount(account: Account) {
+    const usedInEntries = entries.some((entry) => entry.accountId === account.id);
+    if (usedInEntries) {
+      setAccounts(accounts.map((item) => item.id === account.id ? { ...item, active: false, isFavorite: false } : item));
+      setNotice(`${account.canonicalName} was archived because past entries still reference it.`);
+      return;
+    }
+    setAccounts(accounts.filter((item) => item.id !== account.id));
+    setNotice(`Deleted ${account.canonicalName}.`);
+  }
+
+  return (
+    <div className="card list account-manager">
+      <strong>Customer accounts</strong>
+      <div className="field">
+        <label>New customer/account name</label>
+        <input className="input" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Example: Belimo" />
+      </div>
+      <label className="checkline">
+        <input type="checkbox" checked={newFavorite} onChange={(event) => setNewFavorite(event.target.checked)} />
+        Favorite / show first
+      </label>
+      <button className="primary" onClick={addAccount}>Add customer</button>
+      {notice && <p className="small muted" role="status">{notice}</p>}
+      <div className="list compact-list">
+        {sortedAccounts.map((account) => (
+          <div className={`row account-row ${account.active ? "" : "inactive"}`} key={account.id}>
+            {editingId === account.id ? (
+              <div className="grid account-edit">
+                <input className="input" value={editName} onChange={(event) => setEditName(event.target.value)} aria-label={`Edit ${account.canonicalName}`} />
+                <label className="checkline">
+                  <input type="checkbox" checked={editFavorite} onChange={(event) => setEditFavorite(event.target.checked)} />
+                  Favorite
+                </label>
+                <div className="segmented account-actions">
+                  <button className="primary" onClick={() => saveEdit(account.id)}>Save</button>
+                  <button className="secondary" onClick={() => setEditingId(null)}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <strong>{account.canonicalName}</strong>
+                  <div className="small muted">{account.active ? (account.isFavorite ? "Favorite" : "Active") : "Archived"}</div>
+                </div>
+                <div className="segmented account-actions">
+                  <button className="secondary" onClick={() => startEdit(account)}>Change</button>
+                  <button className="danger" onClick={() => deleteAccount(account)}>Delete</button>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function normalizeName(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function uniqueAccountId(name: string, existingAccounts: Account[]) {
+  const base = name
+    .trim()
+    .toLowerCase()
+    .replace(/['’]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "account";
+  const used = new Set(existingAccounts.map((account) => account.id));
+  let candidate = base;
+  let suffix = 2;
+  while (used.has(candidate)) {
+    candidate = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
 }
 
 function HeaderLine({ title, subtitle, right }: { title: string; subtitle?: string; right?: React.ReactNode }) {
@@ -645,12 +802,12 @@ function buildLine(employeeId: string, startTime: string, finishTime: string, ap
   };
 }
 
-function accountLabel(accountId?: string, raw?: string) {
+function accountLabel(accountList: Account[], accountId?: string, raw?: string) {
   if (raw) return raw;
-  return accounts.find((account) => account.id === accountId)?.canonicalName ?? "Unknown account";
+  return accountList.find((account) => account.id === accountId)?.canonicalName ?? "Unknown account";
 }
 
-function summarize(entries: JobEntry[]) {
+function summarize(entries: JobEntry[], accountList: Account[]) {
   const byEmployee = new Map<string, number>();
   const byAccount = new Map<string, number>();
   const byService = new Map<string, number>();
@@ -659,7 +816,8 @@ function summarize(entries: JobEntry[]) {
   for (const entry of entries) {
     const entryHours = entry.workerLines.reduce((sum, line) => sum + line.approvedHours, 0);
     totalHours += entryHours;
-    byAccount.set(accountLabel(entry.accountId, entry.rawAccountText), (byAccount.get(accountLabel(entry.accountId, entry.rawAccountText)) ?? 0) + entryHours);
+    const accountName = accountLabel(accountList, entry.accountId, entry.rawAccountText);
+    byAccount.set(accountName, (byAccount.get(accountName) ?? 0) + entryHours);
     for (const serviceId of entry.serviceIds) {
       const name = services.find((service) => service.id === serviceId)?.label.en ?? serviceId;
       byService.set(name, (byService.get(name) ?? 0) + entryHours);

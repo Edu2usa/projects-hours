@@ -333,6 +333,40 @@ button {
   margin: 0 auto;
 }
 
+.account-manager {
+  max-height: 720px;
+  overflow: auto;
+}
+
+.compact-list {
+  gap: 8px;
+}
+
+.account-row {
+  align-items: flex-start;
+}
+
+.account-row.inactive {
+  opacity: 0.6;
+}
+
+.account-actions {
+  justify-content: flex-end;
+}
+
+.account-edit {
+  width: 100%;
+}
+
+.checkline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 @media (max-width: 760px) {
   .two,
   .three {

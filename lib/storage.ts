@@ -1,8 +1,19 @@
-import type { JobEntry, Session } from "./types";
+import type { Account, JobEntry, Session } from "./types";
 
+const accountsKey = "pm-hours.accounts";
 const entriesKey = "pm-hours.entries";
 const draftKey = "pm-hours.draft";
 const sessionKey = "pm-hours.session";
+
+export function loadAccounts(fallback: Account[]) {
+  if (typeof window === "undefined") return fallback;
+  const raw = window.localStorage.getItem(accountsKey);
+  return raw ? (JSON.parse(raw) as Account[]) : fallback;
+}
+
+export function saveAccounts(accounts: Account[]) {
+  window.localStorage.setItem(accountsKey, JSON.stringify(accounts));
+}
 
 export function loadEntries(fallback: JobEntry[]) {
   if (typeof window === "undefined") return fallback;
