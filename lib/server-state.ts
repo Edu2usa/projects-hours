@@ -32,6 +32,9 @@ export async function loadServerAppState() {
     .eq("key", stateKey)
     .maybeSingle();
 
+  if (isMissingColumnError(valueResult.error)) {
+    return { configured: false, state: seedState, error: "Supabase settings table is missing a jsonb state column." };
+  }
   if (valueResult.error) throw valueResult.error;
   return { configured: true, state: (valueResult.data?.value as AppState | null) ?? seedState };
 }
@@ -53,6 +56,9 @@ export async function saveServerAppState(state: AppState) {
     .from("settings")
     .upsert({ key: stateKey, value: state }, { onConflict: "key" });
 
+  if (isMissingColumnError(valueResult.error)) {
+    return { configured: false, error: "Supabase settings table is missing a jsonb state column." };
+  }
   if (valueResult.error) throw valueResult.error;
   return { configured: true };
 }
