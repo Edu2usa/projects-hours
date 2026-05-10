@@ -38,12 +38,12 @@ type Draft = {
 
 function createEmptyDraft(): Draft {
   return {
-    accountId: seedAccounts[0]?.id ?? "",
+    accountId: "",
     rawAccountText: "",
     workDate: new Date().toISOString().slice(0, 10),
-    startTime: "17:00",
-    finishTime: "01:00",
-    serviceIds: [seedServices[0]?.id ?? ""],
+    startTime: "",
+    finishTime: "",
+    serviceIds: [],
     rawServiceText: "",
     overrideHours: "",
     overrideReason: "",
@@ -330,7 +330,6 @@ function QuickEntry({ accounts, services, draft, setDraft, language, session, su
   });
 
   function update(partial: Partial<Draft>) {
-    if (submitNotice) onEdit();
     if (feedback) setFeedback(null);
     setDraft({ ...draft, ...partial });
   }
@@ -501,6 +500,7 @@ function AccountFields({ accounts, draft, update, language }: { accounts: Accoun
       <div className="field">
         <label>{t.account}</label>
         <select className="select" value={draft.accountId} onChange={(event) => update({ accountId: event.target.value })}>
+          <option value="">{t.chooseAccount}</option>
           {activeAccounts.filter((account) => account.isFavorite).map((account) => <option key={account.id} value={account.id}>Favorite - {account.canonicalName}</option>)}
           {activeAccounts.filter((account) => !account.isFavorite).map((account) => <option key={account.id} value={account.id}>{account.canonicalName}</option>)}
           <option value="other">{t.otherCleanup}</option>
@@ -526,7 +526,7 @@ function TimeFields({ draft, update, calculated, language }: { draft: Draft; upd
       </div>
       <div className="field">
         <label>{t.hours}</label>
-        <input className="input" aria-label={t.hours} value={`${draft.overrideHours || calculated} ${t.hoursLower}`} readOnly />
+        <input className="input" aria-label={t.hours} value={draft.startTime && draft.finishTime ? `${draft.overrideHours || calculated} ${t.hoursLower}` : ""} placeholder={`0 ${t.hoursLower}`} readOnly />
       </div>
       <div className="field">
         <label>{t.start}</label>
