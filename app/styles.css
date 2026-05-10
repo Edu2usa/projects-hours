@@ -259,6 +259,32 @@ button {
   color: var(--bad);
 }
 
+.success-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #b9d8ca;
+  border-radius: 8px;
+  padding: 12px;
+  background: #edf8f1;
+  color: var(--good);
+}
+
+.success-banner div {
+  display: grid;
+  gap: 2px;
+}
+
+.success-banner span,
+.success-banner small {
+  color: var(--ink);
+}
+
+.success-banner small {
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .footer-actions {
   position: sticky;
   bottom: 0;

@@ -24,8 +24,6 @@ import type { JobEntry, Language, Session, WorkerLine } from "../lib/types";
 
 type Screen = "quick" | "crew" | "recent" | "admin";
 
-const today = new Date().toISOString().slice(0, 10);
-
 type Draft = {
   accountId: string;
   rawAccountText: string;
@@ -39,25 +37,28 @@ type Draft = {
   notes: string;
 };
 
-const emptyDraft: Draft = {
-  accountId: accounts[0]?.id ?? "",
-  rawAccountText: "",
-  workDate: today,
-  startTime: "17:00",
-  finishTime: "01:00",
-  serviceIds: [services[0]?.id ?? ""],
-  rawServiceText: "",
-  overrideHours: "",
-  overrideReason: "",
-  notes: ""
-};
+function createEmptyDraft(): Draft {
+  return {
+    accountId: accounts[0]?.id ?? "",
+    rawAccountText: "",
+    workDate: new Date().toISOString().slice(0, 10),
+    startTime: "17:00",
+    finishTime: "01:00",
+    serviceIds: [services[0]?.id ?? ""],
+    rawServiceText: "",
+    overrideHours: "",
+    overrideReason: "",
+    notes: ""
+  };
+}
 
 export default function Home() {
   const [session, setSession] = useState<Session | null>(null);
   const [language, setLanguage] = useState<Language>("en");
   const [screen, setScreen] = useState<Screen>("quick");
   const [entries, setEntries] = useState<JobEntry[]>(demoEntries);
-  const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [draft, setDraft] = useState<Draft>(() => createEmptyDraft());
+  const [submitNotice, setSubmitNotice] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
 
   useEffect(() => {
@@ -109,7 +110,9 @@ export default function Home() {
     setEntries(next);
     saveEntries(next);
     clearDraft();
-    setDraft(emptyDraft);
+    setDraft(createEmptyDraft());
+    const totalHours = entry.workerLines.reduce((sum, line) => sum + line.approvedHours, 0);
+    setSubmitNotice(`${accountLabel(entry.accountId, entry.rawAccountText)} / ${entry.workDate} / ${totalHours.toFixed(1)} hours`);
   }
 
   if (!session) {
@@ -164,6 +167,8 @@ export default function Home() {
             setDraft={setDraft}
             language={language}
             session={session}
+            submitNotice={submitNotice}
+            onEdit={() => setSubmitNotice(null)}
             onSaveDraft={() => saveDraft(draft)}
             onSubmit={(entry) => persistEntry(entry)}
           />
@@ -250,11 +255,13 @@ function Login({ language, onLogin }: { language: Language; onLogin: (session: S
   );
 }
 
-function QuickEntry({ draft, setDraft, language, session, onSaveDraft, onSubmit }: {
+function QuickEntry({ draft, setDraft, language, session, submitNotice, onEdit, onSaveDraft, onSubmit }: {
   draft: Draft;
   setDraft: (draft: Draft) => void;
   language: Language;
   session: Session;
+  submitNotice: string | null;
+  onEdit: () => void;
   onSaveDraft: () => void;
   onSubmit: (entry: JobEntry) => void;
 }) {
@@ -271,6 +278,7 @@ function QuickEntry({ draft, setDraft, language, session, onSaveDraft, onSubmit 
   });
 
   function update(partial: Partial<Draft>) {
+    if (submitNotice) onEdit();
     setDraft({ ...draft, ...partial });
   }
 
@@ -298,6 +306,16 @@ function QuickEntry({ draft, setDraft, language, session, onSaveDraft, onSubmit 
   return (
     <section className="panel grid">
       <HeaderLine title={t.quick} subtitle="Clean one-worker submission" right={<span className={`badge ${flags.length ? "warn" : ""}`}>{flags.length ? `${flags.length} flags` : "Clean"}</span>} />
+      {submitNotice && (
+        <div className="success-banner" role="status" aria-live="polite">
+          <Check size={20} />
+          <div>
+            <strong>{t.submitted}</strong>
+            <span>{submitNotice}</span>
+            <small>{t.readyNext}</small>
+          </div>
+        </div>
+      )}
       <AccountFields draft={draft} update={update} language={language} />
       <TimeFields draft={draft} update={update} calculated={calculated} language={language} />
       <ServiceFields draft={draft} update={update} language={language} />
@@ -319,7 +337,7 @@ function QuickEntry({ draft, setDraft, language, session, onSaveDraft, onSubmit 
 }
 
 function CrewEntry({ language, session, onSubmit }: { language: Language; session: Session; onSubmit: (entry: JobEntry) => void }) {
-  const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [draft, setDraft] = useState<Draft>(() => createEmptyDraft());
   const [workerIds, setWorkerIds] = useState<string[]>(["ramon", "maria"]);
   const [step, setStep] = useState(1);
   const calculated = calculateHours(draft.startTime, draft.finishTime);
@@ -354,6 +372,9 @@ function CrewEntry({ language, session, onSubmit }: { language: Language; sessio
       workerLines: workerIds.map((id) => buildLine(id, draft.startTime, draft.finishTime, draft.overrideHours ? Number(draft.overrideHours) : calculated, Boolean(draft.overrideHours), draft.overrideReason)),
       createdAt: new Date().toISOString()
     });
+    setDraft(createEmptyDraft());
+    setWorkerIds([]);
+    setStep(1);
   }
 
   return (
