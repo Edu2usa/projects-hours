@@ -6,7 +6,7 @@ export async function GET() {
   try {
     return NextResponse.json(await loadServerAppState());
   } catch (error) {
-    return NextResponse.json({ configured: true, error: error instanceof Error ? error.message : "Unknown Supabase error" }, { status: 500 });
+    return NextResponse.json({ configured: true, error: errorMessage(error) }, { status: 500 });
   }
 }
 
@@ -16,6 +16,20 @@ export async function POST(request: NextRequest) {
     const result = await saveServerAppState(state);
     return NextResponse.json({ ...result, ok: result.configured });
   } catch (error) {
-    return NextResponse.json({ configured: true, error: error instanceof Error ? error.message : "Unknown Supabase error" }, { status: 500 });
+    return NextResponse.json({ configured: true, error: errorMessage(error) }, { status: 500 });
   }
+}
+
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") {
+    const maybeError = error as { message?: unknown; code?: unknown; details?: unknown; hint?: unknown };
+    return JSON.stringify({
+      code: maybeError.code,
+      message: maybeError.message,
+      details: maybeError.details,
+      hint: maybeError.hint
+    });
+  }
+  return String(error);
 }
