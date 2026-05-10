@@ -333,7 +333,7 @@ button {
   margin: 0 auto;
 }
 
-.account-manager {
+.master-data-manager {
   max-height: 720px;
   overflow: auto;
 }
@@ -342,20 +342,24 @@ button {
   gap: 8px;
 }
 
-.account-row {
+.master-data-row {
   align-items: flex-start;
 }
 
-.account-row.inactive {
+.master-data-row.inactive {
   opacity: 0.6;
 }
 
-.account-actions {
+.master-data-actions {
   justify-content: flex-end;
 }
 
-.account-edit {
+.master-data-edit {
   width: 100%;
+}
+
+.compact-form {
+  gap: 8px;
 }
 
 .checkline {

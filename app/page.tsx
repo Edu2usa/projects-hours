@@ -14,11 +14,11 @@ import {
   ShieldCheck,
   Users
 } from "lucide-react";
-import { accounts as seedAccounts, demoEntries, employees, services } from "../lib/demo-data";
+import { accounts as seedAccounts, demoEntries, employees as seedEmployees, services as seedServices } from "../lib/demo-data";
 import { calculateHours, flagEntry } from "../lib/hours";
 import { copy, languages } from "../lib/i18n";
-import { clearDraft, clearSession, loadAccounts, loadDraft, loadEntries, loadSession, saveAccounts, saveDraft, saveEntries, saveSession } from "../lib/storage";
-import type { Account, JobEntry, Language, Session, WorkerLine } from "../lib/types";
+import { clearDraft, clearSession, loadAccounts, loadDraft, loadEmployees, loadEntries, loadServices, loadSession, saveAccounts, saveDraft, saveEmployees, saveEntries, saveServices, saveSession } from "../lib/storage";
+import type { Account, Employee, JobEntry, Language, Role, Service, Session, WorkerLine } from "../lib/types";
 
 type Screen = "quick" | "crew" | "recent" | "admin";
 
@@ -42,7 +42,7 @@ function createEmptyDraft(): Draft {
     workDate: new Date().toISOString().slice(0, 10),
     startTime: "17:00",
     finishTime: "01:00",
-    serviceIds: [services[0]?.id ?? ""],
+    serviceIds: [seedServices[0]?.id ?? ""],
     rawServiceText: "",
     overrideHours: "",
     overrideReason: "",
@@ -56,6 +56,8 @@ export default function Home() {
   const [screen, setScreen] = useState<Screen>("quick");
   const [entries, setEntries] = useState<JobEntry[]>(demoEntries);
   const [accountList, setAccountList] = useState<Account[]>(seedAccounts);
+  const [employeeList, setEmployeeList] = useState<Employee[]>(seedEmployees);
+  const [serviceList, setServiceList] = useState<Service[]>(seedServices);
   const [draft, setDraft] = useState<Draft>(() => createEmptyDraft());
   const [submitNotice, setSubmitNotice] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
@@ -63,6 +65,8 @@ export default function Home() {
   useEffect(() => {
     setEntries(loadEntries(demoEntries));
     setAccountList(loadAccounts(seedAccounts));
+    setEmployeeList(loadEmployees(seedEmployees));
+    setServiceList(loadServices(seedServices));
     const savedSession = loadSession();
     const savedDraft = loadDraft<Draft>();
     if (savedSession) {
@@ -83,10 +87,10 @@ export default function Home() {
   }, []);
 
   const t = copy[language];
-  const currentEmployee = employees.find((employee) => employee.id === session?.employeeId);
+  const currentEmployee = employeeList.find((employee) => employee.id === session?.employeeId);
   const employeeEntries = entries.filter((entry) => entry.workerLines.some((line) => line.employeeId === session?.employeeId));
   const flaggedEntries = entries.filter((entry) => entry.flags.length || entry.status !== "approved");
-  const totals = useMemo(() => summarize(entries, accountList), [entries, accountList]);
+  const totals = useMemo(() => summarize(entries, accountList, employeeList, serviceList), [entries, accountList, employeeList, serviceList]);
 
   function cycleLanguage() {
     const current = languages.findIndex((item) => item.code === language);
@@ -118,7 +122,7 @@ export default function Home() {
   if (!session) {
     return (
       <Shell language={language} onLanguage={cycleLanguage}>
-        <Login language={language} onLogin={(next) => {
+        <Login employees={employeeList} language={language} onLogin={(next) => {
           setSession(next);
           setLanguage(next.language);
           saveSession(next);
@@ -164,6 +168,7 @@ export default function Home() {
         {screen === "quick" && (
           <QuickEntry
             accounts={accountList}
+            services={serviceList}
             draft={draft}
             setDraft={setDraft}
             language={language}
@@ -175,7 +180,7 @@ export default function Home() {
           />
         )}
         {screen === "crew" && (
-          <CrewEntry accounts={accountList} language={language} session={session} onSubmit={(entry) => persistEntry(entry)} />
+          <CrewEntry accounts={accountList} employees={employeeList} services={serviceList} language={language} session={session} onSubmit={(entry) => persistEntry(entry)} />
         )}
         {screen === "recent" && (
           <RecentEntries entries={employeeEntries} accounts={accountList} language={language} employeeId={session.employeeId} />
@@ -186,6 +191,10 @@ export default function Home() {
             setEntries={(next) => { setEntries(next); saveEntries(next); }}
             accounts={accountList}
             setAccounts={(next) => { setAccountList(next); saveAccounts(next); }}
+            employees={employeeList}
+            setEmployees={(next) => { setEmployeeList(next); saveEmployees(next); }}
+            services={serviceList}
+            setServices={(next) => { setServiceList(next); saveServices(next); }}
             totals={totals}
             flaggedEntries={flaggedEntries}
           />
@@ -218,7 +227,7 @@ function Shell({ children, language, onLanguage, right }: { children: React.Reac
   );
 }
 
-function Login({ language, onLogin }: { language: Language; onLogin: (session: Session) => void }) {
+function Login({ employees, language, onLogin }: { employees: Employee[]; language: Language; onLogin: (session: Session) => void }) {
   const t = copy[language];
   const [employeeId, setEmployeeId] = useState(employees[0].id);
   const [pin, setPin] = useState("");
@@ -263,8 +272,9 @@ function Login({ language, onLogin }: { language: Language; onLogin: (session: S
   );
 }
 
-function QuickEntry({ accounts, draft, setDraft, language, session, submitNotice, onEdit, onSaveDraft, onSubmit }: {
+function QuickEntry({ accounts, services, draft, setDraft, language, session, submitNotice, onEdit, onSaveDraft, onSubmit }: {
   accounts: Account[];
+  services: Service[];
   draft: Draft;
   setDraft: (draft: Draft) => void;
   language: Language;
@@ -358,7 +368,7 @@ function QuickEntry({ accounts, draft, setDraft, language, session, submitNotice
       )}
       <AccountFields accounts={accounts} draft={draft} update={update} language={language} />
       <TimeFields draft={draft} update={update} calculated={calculated} language={language} />
-      <ServiceFields draft={draft} update={update} language={language} />
+      <ServiceFields services={services} draft={draft} update={update} language={language} />
       <div className="field">
         <label>{t.notes}</label>
         <textarea className="textarea" value={draft.notes} onChange={(event) => update({ notes: event.target.value })} />
@@ -376,7 +386,7 @@ function QuickEntry({ accounts, draft, setDraft, language, session, submitNotice
   );
 }
 
-function CrewEntry({ accounts, language, session, onSubmit }: { accounts: Account[]; language: Language; session: Session; onSubmit: (entry: JobEntry) => void }) {
+function CrewEntry({ accounts, employees, services, language, session, onSubmit }: { accounts: Account[]; employees: Employee[]; services: Service[]; language: Language; session: Session; onSubmit: (entry: JobEntry) => void }) {
   const [draft, setDraft] = useState<Draft>(() => createEmptyDraft());
   const [workerIds, setWorkerIds] = useState<string[]>(["ramon", "maria"]);
   const [step, setStep] = useState(1);
@@ -422,11 +432,11 @@ function CrewEntry({ accounts, language, session, onSubmit }: { accounts: Accoun
       <HeaderLine title={t.crew} subtitle={`${t.crewStep} ${step} / 4`} right={<span className="badge">{workerIds.length} {t.workers}</span>} />
       {step === 1 && <AccountFields accounts={accounts} draft={draft} update={(partial) => setDraft({ ...draft, ...partial })} language={language} />}
       {step === 2 && <TimeFields draft={draft} update={(partial) => setDraft({ ...draft, ...partial })} calculated={calculated} language={language} />}
-      {step === 3 && <ServiceFields draft={draft} update={(partial) => setDraft({ ...draft, ...partial })} language={language} />}
+      {step === 3 && <ServiceFields services={services} draft={draft} update={(partial) => setDraft({ ...draft, ...partial })} language={language} />}
       {step === 4 && (
         <div className="grid">
           <div className="grid two">
-            {employees.filter((item) => item.role !== "admin").map((employee) => (
+            {employees.filter((item) => item.active && item.role !== "admin").map((employee) => (
               <button key={employee.id} className={`chip ${workerIds.includes(employee.id) ? "active" : ""}`} aria-pressed={workerIds.includes(employee.id)} onClick={() => toggleWorker(employee.id)}>
                 {workerIds.includes(employee.id) && <Check size={16} />} {employee.name}
               </button>
@@ -506,7 +516,7 @@ function TimeFields({ draft, update, calculated, language }: { draft: Draft; upd
   );
 }
 
-function ServiceFields({ draft, update, language }: { draft: Draft; update: (partial: Partial<Draft>) => void; language: Language }) {
+function ServiceFields({ services, draft, update, language }: { services: Service[]; draft: Draft; update: (partial: Partial<Draft>) => void; language: Language }) {
   const t = copy[language];
   function toggleService(id: string) {
     update({ serviceIds: draft.serviceIds.includes(id) ? draft.serviceIds.filter((item) => item !== id) : [...draft.serviceIds, id] });
@@ -515,7 +525,7 @@ function ServiceFields({ draft, update, language }: { draft: Draft; update: (par
     <div className="grid">
       <label className="muted small">{t.service}</label>
       <div className="segmented">
-        {services.map((service) => (
+        {services.filter((service) => service.active).map((service) => (
           <button key={service.id} className={`chip ${draft.serviceIds.includes(service.id) ? "active" : ""}`} aria-pressed={draft.serviceIds.includes(service.id)} onClick={() => toggleService(service.id)}>
             {draft.serviceIds.includes(service.id) ? <Check size={16} /> : <Search size={16} />} {service.label[language]}
           </button>
@@ -551,11 +561,15 @@ function RecentEntries({ entries, accounts, language, employeeId }: { entries: J
   );
 }
 
-function AdminDashboard({ entries, setEntries, accounts, setAccounts, totals, flaggedEntries }: {
+function AdminDashboard({ entries, setEntries, accounts, setAccounts, employees, setEmployees, services, setServices, totals, flaggedEntries }: {
   entries: JobEntry[];
   setEntries: (entries: JobEntry[]) => void;
   accounts: Account[];
   setAccounts: (accounts: Account[]) => void;
+  employees: Employee[];
+  setEmployees: (employees: Employee[]) => void;
+  services: Service[];
+  setServices: (services: Service[]) => void;
   totals: ReturnType<typeof summarize>;
   flaggedEntries: JobEntry[];
 }) {
@@ -605,9 +619,9 @@ function AdminDashboard({ entries, setEntries, accounts, setAccounts, totals, fl
       <div className="panel grid">
         <HeaderLine title="Master data" subtitle="Seeded employees, customer/accounts, and services" />
         <div className="grid three">
-          <ReportList title="Employees" rows={employees.map((employee) => ({ label: employee.name, value: employee.role }))} />
+          <EmployeeManager employees={employees} setEmployees={setEmployees} entries={entries} />
           <AccountManager accounts={accounts} setAccounts={setAccounts} entries={entries} />
-          <ReportList title="Services" rows={services.map((service) => ({ label: service.label.en, value: service.isCommon ? "Common" : "Full list" }))} />
+          <ServiceManager services={services} setServices={setServices} entries={entries} />
         </div>
       </div>
     </section>
@@ -685,7 +699,7 @@ function AccountManager({ accounts, setAccounts, entries }: { accounts: Account[
   }
 
   return (
-    <div className="card list account-manager">
+    <div className="card list master-data-manager">
       <strong>Customer accounts</strong>
       <div className="field">
         <label>New customer/account name</label>
@@ -699,15 +713,15 @@ function AccountManager({ accounts, setAccounts, entries }: { accounts: Account[
       {notice && <p className="small muted" role="status">{notice}</p>}
       <div className="list compact-list">
         {sortedAccounts.map((account) => (
-          <div className={`row account-row ${account.active ? "" : "inactive"}`} key={account.id}>
+          <div className={`row master-data-row ${account.active ? "" : "inactive"}`} key={account.id}>
             {editingId === account.id ? (
-              <div className="grid account-edit">
+              <div className="grid master-data-edit">
                 <input className="input" value={editName} onChange={(event) => setEditName(event.target.value)} aria-label={`Edit ${account.canonicalName}`} />
                 <label className="checkline">
                   <input type="checkbox" checked={editFavorite} onChange={(event) => setEditFavorite(event.target.checked)} />
                   Favorite
                 </label>
-                <div className="segmented account-actions">
+                <div className="segmented master-data-actions">
                   <button className="primary" onClick={() => saveEdit(account.id)}>Save</button>
                   <button className="secondary" onClick={() => setEditingId(null)}>Cancel</button>
                 </div>
@@ -718,9 +732,298 @@ function AccountManager({ accounts, setAccounts, entries }: { accounts: Account[
                   <strong>{account.canonicalName}</strong>
                   <div className="small muted">{account.active ? (account.isFavorite ? "Favorite" : "Active") : "Archived"}</div>
                 </div>
-                <div className="segmented account-actions">
+                <div className="segmented master-data-actions">
                   <button className="secondary" onClick={() => startEdit(account)}>Change</button>
                   <button className="danger" onClick={() => deleteAccount(account)}>Delete</button>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EmployeeManager({ employees, setEmployees, entries }: { employees: Employee[]; setEmployees: (employees: Employee[]) => void; entries: JobEntry[] }) {
+  const [newName, setNewName] = useState("");
+  const [newRole, setNewRole] = useState<Role>("worker");
+  const [newLanguage, setNewLanguage] = useState<Language>("en");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editRole, setEditRole] = useState<Role>("worker");
+  const [editLanguage, setEditLanguage] = useState<Language>("en");
+  const [notice, setNotice] = useState<string | null>(null);
+  const sortedEmployees = [...employees].sort((left, right) => Number(right.active) - Number(left.active) || left.name.localeCompare(right.name));
+
+  function nameExists(name: string, exceptId?: string) {
+    const normalized = normalizeName(name);
+    return employees.some((employee) => employee.id !== exceptId && normalizeName(employee.name) === normalized);
+  }
+
+  function addEmployee() {
+    const name = newName.trim();
+    if (!name) {
+      setNotice("Enter an employee name before adding it.");
+      return;
+    }
+    if (nameExists(name)) {
+      setNotice("That employee already exists.");
+      return;
+    }
+    const nextEmployee: Employee = {
+      id: uniqueSlugId(name, employees.map((employee) => employee.id), "employee"),
+      name,
+      role: newRole,
+      active: true,
+      preferredLanguage: newLanguage
+    };
+    setEmployees([...employees, nextEmployee]);
+    setNewName("");
+    setNewRole("worker");
+    setNewLanguage("en");
+    setNotice(`Added ${name}.`);
+  }
+
+  function startEdit(employee: Employee) {
+    setEditingId(employee.id);
+    setEditName(employee.name);
+    setEditRole(employee.role);
+    setEditLanguage(employee.preferredLanguage ?? "en");
+    setNotice(null);
+  }
+
+  function saveEdit(employeeId: string) {
+    const name = editName.trim();
+    if (!name) {
+      setNotice("Employee name cannot be blank.");
+      return;
+    }
+    if (nameExists(name, employeeId)) {
+      setNotice("Another employee already uses that name.");
+      return;
+    }
+    setEmployees(employees.map((employee) => employee.id === employeeId ? { ...employee, name, role: editRole, preferredLanguage: editLanguage, active: true } : employee));
+    setEditingId(null);
+    setNotice(`Updated ${name}.`);
+  }
+
+  function deleteEmployee(employee: Employee) {
+    const activeAdminCount = employees.filter((item) => item.active && item.role === "admin").length;
+    if (employee.role === "admin" && activeAdminCount <= 1) {
+      setNotice("Keep at least one active admin.");
+      return;
+    }
+    const usedInEntries = entries.some((entry) => entry.submittedByEmployeeId === employee.id || entry.workerLines.some((line) => line.employeeId === employee.id));
+    if (usedInEntries) {
+      setEmployees(employees.map((item) => item.id === employee.id ? { ...item, active: false } : item));
+      setNotice(`${employee.name} was archived because past entries still reference them.`);
+      return;
+    }
+    setEmployees(employees.filter((item) => item.id !== employee.id));
+    setNotice(`Deleted ${employee.name}.`);
+  }
+
+  return (
+    <div className="card list master-data-manager">
+      <strong>Employees</strong>
+      <div className="field">
+        <label>New employee name</label>
+        <input className="input" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Example: Jonathan" />
+      </div>
+      <div className="grid two compact-form">
+        <select className="select" value={newRole} onChange={(event) => setNewRole(event.target.value as Role)} aria-label="New employee role">
+          <option value="worker">Worker</option>
+          <option value="crew_lead">Crew lead</option>
+          <option value="admin">Admin</option>
+        </select>
+        <select className="select" value={newLanguage} onChange={(event) => setNewLanguage(event.target.value as Language)} aria-label="New employee language">
+          <option value="en">English</option>
+          <option value="es">Spanish</option>
+          <option value="pt">Portuguese</option>
+        </select>
+      </div>
+      <button className="primary" onClick={addEmployee}>Add employee</button>
+      {notice && <p className="small muted" role="status">{notice}</p>}
+      <div className="list compact-list">
+        {sortedEmployees.map((employee) => (
+          <div className={`row master-data-row ${employee.active ? "" : "inactive"}`} key={employee.id}>
+            {editingId === employee.id ? (
+              <div className="grid master-data-edit">
+                <input className="input" value={editName} onChange={(event) => setEditName(event.target.value)} aria-label={`Edit ${employee.name}`} />
+                <div className="grid two compact-form">
+                  <select className="select" value={editRole} onChange={(event) => setEditRole(event.target.value as Role)} aria-label={`Role for ${employee.name}`}>
+                    <option value="worker">Worker</option>
+                    <option value="crew_lead">Crew lead</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                  <select className="select" value={editLanguage} onChange={(event) => setEditLanguage(event.target.value as Language)} aria-label={`Language for ${employee.name}`}>
+                    <option value="en">English</option>
+                    <option value="es">Spanish</option>
+                    <option value="pt">Portuguese</option>
+                  </select>
+                </div>
+                <div className="segmented master-data-actions">
+                  <button className="primary" onClick={() => saveEdit(employee.id)}>Save</button>
+                  <button className="secondary" onClick={() => setEditingId(null)}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <strong>{employee.name}</strong>
+                  <div className="small muted">{employee.active ? `${employee.role} / ${(employee.preferredLanguage ?? "en").toUpperCase()}` : "Archived"}</div>
+                </div>
+                <div className="segmented master-data-actions">
+                  <button className="secondary" onClick={() => startEdit(employee)}>Change</button>
+                  <button className="danger" onClick={() => deleteEmployee(employee)}>Delete</button>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ServiceManager({ services, setServices, entries }: { services: Service[]; setServices: (services: Service[]) => void; entries: JobEntry[] }) {
+  const [newEnglish, setNewEnglish] = useState("");
+  const [newSpanish, setNewSpanish] = useState("");
+  const [newPortuguese, setNewPortuguese] = useState("");
+  const [newCommon, setNewCommon] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editEnglish, setEditEnglish] = useState("");
+  const [editSpanish, setEditSpanish] = useState("");
+  const [editPortuguese, setEditPortuguese] = useState("");
+  const [editCommon, setEditCommon] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const sortedServices = [...services].sort((left, right) => Number(right.active) - Number(left.active) || left.label.en.localeCompare(right.label.en));
+
+  function nameExists(name: string, exceptId?: string) {
+    const normalized = normalizeName(name);
+    return services.some((service) => service.id !== exceptId && normalizeName(service.label.en) === normalized);
+  }
+
+  function addService() {
+    const english = newEnglish.trim();
+    if (!english) {
+      setNotice("Enter the English service name before adding it.");
+      return;
+    }
+    if (nameExists(english)) {
+      setNotice("That service already exists.");
+      return;
+    }
+    const id = uniqueSlugId(english, services.map((service) => service.id), "service");
+    const nextService: Service = {
+      id,
+      canonicalKey: id.replace(/-/g, "_"),
+      label: {
+        en: english,
+        es: newSpanish.trim() || english,
+        pt: newPortuguese.trim() || english
+      },
+      active: true,
+      isCommon: newCommon
+    };
+    setServices([...services, nextService]);
+    setNewEnglish("");
+    setNewSpanish("");
+    setNewPortuguese("");
+    setNewCommon(false);
+    setNotice(`Added ${english}.`);
+  }
+
+  function startEdit(service: Service) {
+    setEditingId(service.id);
+    setEditEnglish(service.label.en);
+    setEditSpanish(service.label.es);
+    setEditPortuguese(service.label.pt);
+    setEditCommon(service.isCommon);
+    setNotice(null);
+  }
+
+  function saveEdit(serviceId: string) {
+    const english = editEnglish.trim();
+    if (!english) {
+      setNotice("Service name cannot be blank.");
+      return;
+    }
+    if (nameExists(english, serviceId)) {
+      setNotice("Another service already uses that name.");
+      return;
+    }
+    setServices(services.map((service) => service.id === serviceId ? {
+      ...service,
+      label: {
+        en: english,
+        es: editSpanish.trim() || english,
+        pt: editPortuguese.trim() || english
+      },
+      isCommon: editCommon,
+      active: true
+    } : service));
+    setEditingId(null);
+    setNotice(`Updated ${english}.`);
+  }
+
+  function deleteService(service: Service) {
+    const usedInEntries = entries.some((entry) => entry.serviceIds.includes(service.id));
+    if (usedInEntries) {
+      setServices(services.map((item) => item.id === service.id ? { ...item, active: false, isCommon: false } : item));
+      setNotice(`${service.label.en} was archived because past entries still reference it.`);
+      return;
+    }
+    setServices(services.filter((item) => item.id !== service.id));
+    setNotice(`Deleted ${service.label.en}.`);
+  }
+
+  return (
+    <div className="card list master-data-manager">
+      <strong>Services</strong>
+      <div className="field">
+        <label>New service name</label>
+        <input className="input" value={newEnglish} onChange={(event) => setNewEnglish(event.target.value)} placeholder="English" />
+      </div>
+      <div className="grid two compact-form">
+        <input className="input" value={newSpanish} onChange={(event) => setNewSpanish(event.target.value)} placeholder="Spanish label" aria-label="New service Spanish label" />
+        <input className="input" value={newPortuguese} onChange={(event) => setNewPortuguese(event.target.value)} placeholder="Portuguese label" aria-label="New service Portuguese label" />
+      </div>
+      <label className="checkline">
+        <input type="checkbox" checked={newCommon} onChange={(event) => setNewCommon(event.target.checked)} />
+        Common / show as big button
+      </label>
+      <button className="primary" onClick={addService}>Add service</button>
+      {notice && <p className="small muted" role="status">{notice}</p>}
+      <div className="list compact-list">
+        {sortedServices.map((service) => (
+          <div className={`row master-data-row ${service.active ? "" : "inactive"}`} key={service.id}>
+            {editingId === service.id ? (
+              <div className="grid master-data-edit">
+                <input className="input" value={editEnglish} onChange={(event) => setEditEnglish(event.target.value)} aria-label={`Edit ${service.label.en}`} />
+                <div className="grid two compact-form">
+                  <input className="input" value={editSpanish} onChange={(event) => setEditSpanish(event.target.value)} aria-label={`Spanish label for ${service.label.en}`} />
+                  <input className="input" value={editPortuguese} onChange={(event) => setEditPortuguese(event.target.value)} aria-label={`Portuguese label for ${service.label.en}`} />
+                </div>
+                <label className="checkline">
+                  <input type="checkbox" checked={editCommon} onChange={(event) => setEditCommon(event.target.checked)} />
+                  Common
+                </label>
+                <div className="segmented master-data-actions">
+                  <button className="primary" onClick={() => saveEdit(service.id)}>Save</button>
+                  <button className="secondary" onClick={() => setEditingId(null)}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <strong>{service.label.en}</strong>
+                  <div className="small muted">{service.active ? (service.isCommon ? "Common" : "Full list") : "Archived"}</div>
+                </div>
+                <div className="segmented master-data-actions">
+                  <button className="secondary" onClick={() => startEdit(service)}>Change</button>
+                  <button className="danger" onClick={() => deleteService(service)}>Delete</button>
                 </div>
               </>
             )}
@@ -735,14 +1038,14 @@ function normalizeName(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function uniqueAccountId(name: string, existingAccounts: Account[]) {
+function uniqueSlugId(name: string, usedIds: string[], fallback: string) {
   const base = name
     .trim()
     .toLowerCase()
     .replace(/['’]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "account";
-  const used = new Set(existingAccounts.map((account) => account.id));
+    .replace(/^-+|-+$/g, "") || fallback;
+  const used = new Set(usedIds);
   let candidate = base;
   let suffix = 2;
   while (used.has(candidate)) {
@@ -750,6 +1053,10 @@ function uniqueAccountId(name: string, existingAccounts: Account[]) {
     suffix += 1;
   }
   return candidate;
+}
+
+function uniqueAccountId(name: string, existingAccounts: Account[]) {
+  return uniqueSlugId(name, existingAccounts.map((account) => account.id), "account");
 }
 
 function HeaderLine({ title, subtitle, right }: { title: string; subtitle?: string; right?: React.ReactNode }) {
@@ -807,7 +1114,7 @@ function accountLabel(accountList: Account[], accountId?: string, raw?: string) 
   return accountList.find((account) => account.id === accountId)?.canonicalName ?? "Unknown account";
 }
 
-function summarize(entries: JobEntry[], accountList: Account[]) {
+function summarize(entries: JobEntry[], accountList: Account[], employeeList: Employee[], serviceList: Service[]) {
   const byEmployee = new Map<string, number>();
   const byAccount = new Map<string, number>();
   const byService = new Map<string, number>();
@@ -819,11 +1126,11 @@ function summarize(entries: JobEntry[], accountList: Account[]) {
     const accountName = accountLabel(accountList, entry.accountId, entry.rawAccountText);
     byAccount.set(accountName, (byAccount.get(accountName) ?? 0) + entryHours);
     for (const serviceId of entry.serviceIds) {
-      const name = services.find((service) => service.id === serviceId)?.label.en ?? serviceId;
+      const name = serviceList.find((service) => service.id === serviceId)?.label.en ?? serviceId;
       byService.set(name, (byService.get(name) ?? 0) + entryHours);
     }
     for (const line of entry.workerLines) {
-      const name = employees.find((employee) => employee.id === line.employeeId)?.name ?? line.employeeId;
+      const name = employeeList.find((employee) => employee.id === line.employeeId)?.name ?? line.employeeId;
       byEmployee.set(name, (byEmployee.get(name) ?? 0) + line.approvedHours);
     }
   }
