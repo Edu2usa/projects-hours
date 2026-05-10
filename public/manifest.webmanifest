@@ -1,0 +1,17 @@
+{
+  "name": "Special Project Hours",
+  "short_name": "PM Hours",
+  "description": "Preferred Maintenance special-project hour capture and payroll cleanup.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f8f5",
+  "theme_color": "#1f4f46",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
