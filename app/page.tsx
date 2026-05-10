@@ -18,6 +18,7 @@ import { accounts as seedAccounts, demoEntries, employees as seedEmployees, serv
 import { calculateHours, flagEntry } from "../lib/hours";
 import { copy, languages } from "../lib/i18n";
 import { clearDraft, clearSession, loadAccounts, loadDraft, loadEmployees, loadEntries, loadServices, loadSession, saveAccounts, saveDraft, saveEmployees, saveEntries, saveServices, saveSession } from "../lib/storage";
+import { loadRemoteAppState, saveRemoteAppState } from "../lib/app-state";
 import type { Account, Employee, JobEntry, Language, Role, Service, Session, WorkerLine } from "../lib/types";
 
 type Screen = "quick" | "crew" | "recent" | "admin";
@@ -92,6 +93,36 @@ export default function Home() {
   const flaggedEntries = entries.filter((entry) => entry.flags.length || entry.status !== "approved");
   const totals = useMemo(() => summarize(entries, accountList, employeeList, serviceList), [entries, accountList, employeeList, serviceList]);
 
+  useEffect(() => {
+    let mounted = true;
+    loadRemoteAppState()
+      .then((remoteState) => {
+        if (!mounted || !remoteState) return;
+        setAccountList(remoteState.accounts);
+        setEmployeeList(remoteState.employees);
+        setServiceList(remoteState.services);
+        setEntries(remoteState.entries);
+        saveAccounts(remoteState.accounts);
+        saveEmployees(remoteState.employees);
+        saveServices(remoteState.services);
+        saveEntries(remoteState.entries);
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  function persistAppState(nextState: Partial<{ accounts: Account[]; employees: Employee[]; services: Service[]; entries: JobEntry[] }>) {
+    const state = {
+      accounts: nextState.accounts ?? accountList,
+      employees: nextState.employees ?? employeeList,
+      services: nextState.services ?? serviceList,
+      entries: nextState.entries ?? entries
+    };
+    void saveRemoteAppState(state);
+  }
+
   function cycleLanguage() {
     const current = languages.findIndex((item) => item.code === language);
     const next = languages[(current + 1) % languages.length].code;
@@ -113,6 +144,7 @@ export default function Home() {
     const next = [entry, ...entries];
     setEntries(next);
     saveEntries(next);
+    persistAppState({ entries: next });
     clearDraft();
     setDraft(createEmptyDraft());
     const totalHours = entry.workerLines.reduce((sum, line) => sum + line.approvedHours, 0);
@@ -188,13 +220,13 @@ export default function Home() {
         {screen === "admin" && currentEmployee?.role === "admin" && (
           <AdminDashboard
             entries={entries}
-            setEntries={(next) => { setEntries(next); saveEntries(next); }}
+            setEntries={(next) => { setEntries(next); saveEntries(next); persistAppState({ entries: next }); }}
             accounts={accountList}
-            setAccounts={(next) => { setAccountList(next); saveAccounts(next); }}
+            setAccounts={(next) => { setAccountList(next); saveAccounts(next); persistAppState({ accounts: next }); }}
             employees={employeeList}
-            setEmployees={(next) => { setEmployeeList(next); saveEmployees(next); }}
+            setEmployees={(next) => { setEmployeeList(next); saveEmployees(next); persistAppState({ employees: next }); }}
             services={serviceList}
-            setServices={(next) => { setServiceList(next); saveServices(next); }}
+            setServices={(next) => { setServiceList(next); saveServices(next); persistAppState({ services: next }); }}
             totals={totals}
             flaggedEntries={flaggedEntries}
           />

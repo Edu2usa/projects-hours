@@ -152,7 +152,8 @@ create table if not exists audit_log (
 
 create table if not exists settings (
   key text primary key,
-  value_json jsonb not null
+  value_json jsonb not null,
+  updated_at timestamptz not null default now()
 );
 
 create index if not exists job_entries_work_date_idx on job_entries(work_date);
@@ -173,7 +174,8 @@ alter table correction_requests enable row level security;
 alter table audit_log enable row level security;
 alter table settings enable row level security;
 
--- MVP note: Next.js route handlers should use the service role key for PIN auth and admin actions.
+-- MVP note: Next.js route handlers use the service role key for shared app-state persistence.
+-- Employee/admin PIN behavior is intentionally unchanged for now.
 -- Add stricter JWT/RLS policies once employee sessions are migrated from PIN tokens to Supabase Auth.
 
 insert into services (canonical_key, label_en, label_es, label_pt, active, is_common, sort_order)

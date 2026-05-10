@@ -1,17 +1,20 @@
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
-import { accounts, demoEntries, employees, services } from "../../../../lib/demo-data";
+import { loadServerAppState } from "../../../../lib/server-state";
+import type { Account, Employee, Service } from "../../../../lib/types";
 
 export async function GET() {
-  const rows = demoEntries.flatMap((entry) =>
+  const { state } = await loadServerAppState();
+  const { accounts, employees, entries, services } = state;
+  const rows = entries.flatMap((entry) =>
     entry.workerLines.map((line) => ({
       Date: entry.workDate,
       "Submitted at": entry.createdAt,
-      "Submitted by": employeeName(entry.submittedByEmployeeId),
-      "Employee worked": employeeName(line.employeeId),
-      "Account/site": accountName(entry.accountId, entry.rawAccountText),
+      "Submitted by": employeeName(employees, entry.submittedByEmployeeId),
+      "Employee worked": employeeName(employees, line.employeeId),
+      "Account/site": accountName(accounts, entry.accountId, entry.rawAccountText),
       "Raw account": entry.rawAccountText ?? "",
-      Services: entry.serviceIds.map(serviceName).join(", "),
+      Services: entry.serviceIds.map((serviceId) => serviceName(services, serviceId)).join(", "),
       "Raw service": entry.rawServiceText ?? "",
       Start: line.startTime,
       Finish: line.finishTime,
@@ -26,7 +29,7 @@ export async function GET() {
   );
 
   const payroll = employees.map((employee) => {
-    const lines = demoEntries.flatMap((entry) => entry.workerLines).filter((line) => line.employeeId === employee.id);
+    const lines = entries.flatMap((entry) => entry.workerLines).filter((line) => line.employeeId === employee.id);
     return {
       Employee: employee.name,
       "REG hours": sum(lines.map((line) => line.paySplits.REG)),
@@ -37,16 +40,16 @@ export async function GET() {
     };
   });
 
-  const clientServices = demoEntries.flatMap((entry) =>
+  const clientServices = entries.flatMap((entry) =>
     entry.serviceIds.map((serviceId) => ({
-      "Account/site": accountName(entry.accountId, entry.rawAccountText),
-      Service: serviceName(serviceId),
+      "Account/site": accountName(accounts, entry.accountId, entry.rawAccountText),
+      Service: serviceName(services, serviceId),
       "Total hours": sum(entry.workerLines.map((line) => line.approvedHours)),
-      "Employee breakdown": entry.workerLines.map((line) => `${employeeName(line.employeeId)} ${line.approvedHours}`).join("; ")
+      "Employee breakdown": entry.workerLines.map((line) => `${employeeName(employees, line.employeeId)} ${line.approvedHours}`).join("; ")
     }))
   );
 
-  const audit = demoEntries.flatMap((entry) =>
+  const audit = entries.flatMap((entry) =>
     entry.flags.map((flag) => ({
       "Entry ID": entry.id,
       "Flag type": flag,
@@ -90,14 +93,14 @@ function sum(values: number[]) {
   return Math.round(values.reduce((total, value) => total + value, 0) * 100) / 100;
 }
 
-function employeeName(id: string) {
+function employeeName(employees: Employee[], id: string) {
   return employees.find((employee) => employee.id === id)?.name ?? id;
 }
 
-function accountName(id?: string, raw?: string) {
+function accountName(accounts: Account[], id?: string, raw?: string) {
   return raw || accounts.find((account) => account.id === id)?.canonicalName || "Unknown";
 }
 
-function serviceName(id: string) {
+function serviceName(services: Service[], id: string) {
   return services.find((service) => service.id === id)?.label.en ?? id;
 }
