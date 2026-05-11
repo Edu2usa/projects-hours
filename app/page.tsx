@@ -104,7 +104,7 @@ export default function Home() {
   const t = copy[language];
   const currentEmployee = employeeList.find((employee) => employee.id === session?.employeeId);
   const employeeEntries = entries.filter((entry) => entry.workerLines.some((line) => line.employeeId === session?.employeeId));
-  const flaggedEntries = entries.filter((entry) => entry.flags.length || entry.status !== "approved");
+  const flaggedEntries = entries.filter((entry) => entry.flags.length || entry.status !== "approved" || entry.rawAccountText || entry.rawServiceText);
   const totals = useMemo(() => summarize(entries, accountList, employeeList, serviceList), [entries, accountList, employeeList, serviceList]);
 
   useEffect(() => {
@@ -248,6 +248,35 @@ export default function Home() {
             setServices={(next) => { setServiceList(next); saveServices(next); persistAppState({ services: next }); }}
             totals={totals}
             flaggedEntries={flaggedEntries}
+            saveAdminState={(nextState) => {
+              const nextAccounts = nextState.accounts ?? accountList;
+              const nextEmployees = nextState.employees ?? employeeList;
+              const nextServices = nextState.services ?? serviceList;
+              const nextEntries = nextState.entries ?? entries;
+              if (nextState.accounts) {
+                setAccountList(nextAccounts);
+                saveAccounts(nextAccounts);
+              }
+              if (nextState.employees) {
+                setEmployeeList(nextEmployees);
+                saveEmployees(nextEmployees);
+              }
+              if (nextState.services) {
+                setServiceList(nextServices);
+                saveServices(nextServices);
+              }
+              if (nextState.entries) {
+                setEntries(nextEntries);
+                saveEntries(nextEntries);
+              }
+              void saveRemoteAppState({
+                version: 2,
+                accounts: nextAccounts,
+                employees: nextEmployees,
+                services: nextServices,
+                entries: nextEntries
+              }, session.token);
+            }}
           />
         )}
       </main>
@@ -760,7 +789,7 @@ function RecentEntries({ entries, accounts, language, employeeId }: { entries: J
   );
 }
 
-function AdminDashboard({ entries, setEntries, accounts, setAccounts, employees, setEmployees, services, setServices, totals, flaggedEntries }: {
+function AdminDashboard({ entries, setEntries, accounts, setAccounts, employees, setEmployees, services, setServices, totals, flaggedEntries, saveAdminState }: {
   entries: JobEntry[];
   setEntries: (entries: JobEntry[]) => void;
   accounts: Account[];
@@ -771,9 +800,35 @@ function AdminDashboard({ entries, setEntries, accounts, setAccounts, employees,
   setServices: (services: Service[]) => void;
   totals: ReturnType<typeof summarize>;
   flaggedEntries: JobEntry[];
+  saveAdminState: (nextState: Partial<{ accounts: Account[]; employees: Employee[]; services: Service[]; entries: JobEntry[] }>) => void;
 }) {
   function resolve(entryId: string) {
     setEntries(entries.map((entry) => entry.id === entryId ? { ...entry, status: "approved", flags: [] } : entry));
+  }
+
+  function createCustomerFromRaw(entry: JobEntry) {
+    const canonicalName = (entry.rawAccountText ?? "").trim();
+    if (!canonicalName) return;
+    const existingAccount = accounts.find((account) => normalizeName(account.canonicalName) === normalizeName(canonicalName));
+    const nextAccount = existingAccount ?? {
+      id: uniqueAccountId(canonicalName, accounts),
+      canonicalName,
+      active: true,
+      isFavorite: false
+    };
+    const nextAccounts = existingAccount ? accounts : [...accounts, nextAccount];
+    const nextEntries = entries.map((item) => {
+      if (item.id !== entry.id) return item;
+      const remainingFlags = item.flags.filter((flag) => flag !== "Other account needs cleanup");
+      return {
+        ...item,
+        accountId: nextAccount.id,
+        rawAccountText: undefined,
+        flags: remainingFlags,
+        status: remainingFlags.length ? item.status : "approved"
+      };
+    });
+    saveAdminState({ accounts: nextAccounts, entries: nextEntries });
   }
 
   return (
@@ -808,9 +863,13 @@ function AdminDashboard({ entries, setEntries, accounts, setAccounts, employees,
             <div className="row" key={entry.id}>
               <div>
                 <strong>{accountLabel(accounts, entry.accountId, entry.rawAccountText)}</strong>
-                <div className="small muted">{entry.workDate} / {entry.flags.join(", ")}</div>
+                <div className="small muted">{entry.workDate} / {entry.flags.join(", ") || "Cleanup needed"}</div>
+                {entry.rawAccountText && <div className="small muted">Raw account: {entry.rawAccountText}</div>}
               </div>
-              <button className="secondary" onClick={() => resolve(entry.id)}>Resolve</button>
+              <div className="segmented master-data-actions">
+                {entry.rawAccountText && <button className="primary" onClick={() => createCustomerFromRaw(entry)}>Add customer</button>}
+                <button className="secondary" onClick={() => resolve(entry.id)} disabled={Boolean(entry.rawAccountText)}>Resolve</button>
+              </div>
             </div>
           ))}
           {flaggedEntries.length === 0 && <p className="muted">No pending flags.</p>}
