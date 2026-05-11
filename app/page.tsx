@@ -82,10 +82,12 @@ export default function Home() {
     setServiceList(loadServices(seedServices));
     const savedSession = loadSession();
     const savedDraft = loadDraft<Draft>();
-    if (savedSession) {
+    if (savedSession?.token) {
       setSession(savedSession);
       setLanguage(savedSession.language);
       setScreen(savedSession.admin ? "admin" : "quick");
+    } else if (savedSession) {
+      clearSession();
     }
     if (savedDraft) setDraft(savedDraft);
     setOnline(navigator.onLine);
@@ -132,7 +134,7 @@ export default function Home() {
       services: nextState.services ?? serviceList,
       entries: nextState.entries ?? entries
     };
-    void saveRemoteAppState(state);
+    void saveRemoteAppState(state, session?.token);
   }
 
   function cycleLanguage() {
@@ -271,19 +273,33 @@ function Shell({ children, language, onLanguage, right }: { children: React.Reac
   );
 }
 
-function Login({ employees, language, onLogin }: { employees: Employee[]; language: Language; onLogin: (session: Session) => void }) {
+function Login({ language, onLogin }: { employees: Employee[]; language: Language; onLogin: (session: Session) => void }) {
   const t = copy[language];
-  const [employeeId, setEmployeeId] = useState(employees[0].id);
+  const [username, setUsername] = useState("");
   const [pin, setPin] = useState("");
-  const [adminMode, setAdminMode] = useState(false);
-  const employee = employees.find((item) => item.id === employeeId) ?? employees[0];
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  function submit() {
-    if (adminMode) {
-      onLogin({ employeeId: "ed", role: "admin", language, admin: true });
-      return;
+  async function submit() {
+    setFeedback(null);
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ username, pin })
+      });
+      const payload = await response.json() as { ok?: boolean; session?: Session; error?: string };
+      if (!response.ok || !payload.ok || !payload.session) {
+        setFeedback(payload.error ?? t.invalidLogin);
+        return;
+      }
+      onLogin(payload.session);
+    } catch {
+      setFeedback(t.loginError);
+    } finally {
+      setSubmitting(false);
     }
-    onLogin({ employeeId, role: employee.role, language: employee.preferredLanguage ?? language, admin: employee.role === "admin" });
   }
 
   return (
@@ -294,23 +310,20 @@ function Login({ employees, language, onLogin }: { employees: Employee[]; langua
           <p className="muted">{t.loginSubtitle}</p>
         </div>
         <div className="field">
-          <label>{t.employee}</label>
-          <select className="select" value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} disabled={adminMode}>
-            {employees.filter((item) => item.active).map((item) => (
-              <option key={item.id} value={item.id}>{item.name}</option>
-            ))}
-          </select>
+          <label>{t.user}</label>
+          <input className="input" value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
         </div>
         <div className="field">
-          <label>{adminMode ? t.adminPin : t.pin}</label>
-          <input className="input" value={pin} onChange={(event) => setPin(event.target.value)} inputMode="numeric" maxLength={adminMode ? 12 : 4} type="password" />
+          <label>{t.pin}</label>
+          <input className="input" value={pin} onChange={(event) => setPin(event.target.value)} inputMode="numeric" maxLength={4} type="password" autoComplete="current-password" />
         </div>
-        <div className="segmented">
-          <button className={`chip ${!adminMode ? "active" : ""}`} aria-pressed={!adminMode} onClick={() => setAdminMode(false)}>{t.employeeMode}</button>
-          <button className={`chip ${adminMode ? "active" : ""}`} aria-pressed={adminMode} onClick={() => setAdminMode(true)}>{t.adminMode}</button>
-        </div>
-        <button className="primary" onClick={submit}>{t.signIn}</button>
-        <p className="demo-note small">{t.demoAuth}</p>
+        {feedback && (
+          <div className="feedback-banner error" role="status">
+            <AlertTriangle size={18} />
+            <span>{feedback}</span>
+          </div>
+        )}
+        <button className="primary" onClick={submit} disabled={submitting}>{submitting ? t.signingIn : t.signIn}</button>
       </section>
     </main>
   );

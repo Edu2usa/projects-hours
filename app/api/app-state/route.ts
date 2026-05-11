@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verifySessionToken } from "../../../lib/auth-token";
 import { loadServerAppState, saveServerAppState } from "../../../lib/server-state";
 import type { AppState } from "../../../lib/app-state";
 
@@ -12,6 +13,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+    const claims = verifySessionToken(token);
+    if (!claims) return NextResponse.json({ configured: true, error: "Unauthorized" }, { status: 401 });
     const state = await request.json() as AppState;
     const result = await saveServerAppState(state);
     return NextResponse.json({ ...result, ok: result.configured });

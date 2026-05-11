@@ -1,10 +1,15 @@
 import type { Account, Employee, JobEntry, Service } from "./types";
 
 export const employees: Employee[] = [
-  { id: "ed", name: "Ed Oliveira", role: "admin", active: true, preferredLanguage: "en" },
-  { id: "ramon", name: "Ramon", role: "crew_lead", active: true, preferredLanguage: "es" },
-  { id: "maria", name: "Maria", role: "worker", active: true, preferredLanguage: "pt" },
-  { id: "jose", name: "Jose", role: "worker", active: true, preferredLanguage: "es" }
+  { id: "ventura", name: "Jonathan Ventura", username: "Ventura", role: "worker", active: true, preferredLanguage: "es" },
+  { id: "eusebio", name: "Eusebio Hidaldo", username: "Eusebio", role: "worker", active: true, preferredLanguage: "es" },
+  { id: "jara", name: "Mario Jara", username: "Jara", role: "worker", active: true, preferredLanguage: "es" },
+  { id: "ramon", name: "Ramon Orta", username: "Ramon", role: "crew_lead", active: true, preferredLanguage: "es" },
+  { id: "henri", name: "Henri Garcia", username: "Henri", role: "worker", active: true, preferredLanguage: "es" },
+  { id: "jr", name: "Ed Jr", username: "Jr", role: "admin", active: true, preferredLanguage: "en" },
+  { id: "delota", name: "Jonathan Delota", username: "Delota", role: "worker", active: true, preferredLanguage: "es" },
+  { id: "morfe", name: "Jose Morfe", username: "Morfe", role: "worker", active: true, preferredLanguage: "es" },
+  { id: "ariel", name: "Ariel Vargas", username: "Ariel", role: "worker", active: true, preferredLanguage: "es" }
 ];
 
 export const accounts: Account[] = [
@@ -56,31 +61,4 @@ export const services: Service[] = [
   { id: "emergency", canonicalKey: "emergency_cleanup", label: { en: "Emergency cleanup", es: "Emergencia", pt: "Emergencia" }, active: true, isCommon: false }
 ];
 
-export const demoEntries: JobEntry[] = [
-  {
-    id: "demo-1",
-    submittedByEmployeeId: "ramon",
-    accountId: "resonetics",
-    workDate: new Date().toISOString().slice(0, 10),
-    defaultStartTime: "17:00",
-    defaultFinishTime: "01:00",
-    defaultCalculatedHours: 8,
-    serviceIds: ["floor-cleaning", "windows"],
-    notes: "Night special project.",
-    status: "approved",
-    flags: [],
-    workerLines: [
-      {
-        id: "line-1",
-        employeeId: "ramon",
-        startTime: "17:00",
-        finishTime: "01:00",
-        calculatedHours: 8,
-        approvedHours: 8,
-        manualOverride: false,
-        paySplits: { REG: 8, OT: 0, DT: 0 }
-      }
-    ],
-    createdAt: new Date().toISOString()
-  }
-];
+export const demoEntries: JobEntry[] = [];

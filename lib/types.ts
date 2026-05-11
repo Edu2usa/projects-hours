@@ -6,6 +6,7 @@ export type EntryStatus = "approved" | "flagged" | "needs_review";
 export type Employee = {
   id: string;
   name: string;
+  username?: string;
   role: Role;
   active: boolean;
   preferredLanguage?: Language;
@@ -63,4 +64,5 @@ export type Session = {
   role: Role;
   language: Language;
   admin: boolean;
+  token: string;
 };

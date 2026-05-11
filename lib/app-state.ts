@@ -14,10 +14,13 @@ export async function loadRemoteAppState() {
   return payload.configured && payload.state ? payload.state : null;
 }
 
-export async function saveRemoteAppState(state: AppState) {
+export async function saveRemoteAppState(state: AppState, token?: string) {
   const response = await fetch("/api/app-state", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...(token ? { authorization: `Bearer ${token}` } : {})
+    },
     body: JSON.stringify(state)
   });
   return response.ok;
