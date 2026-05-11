@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySessionToken } from "../../../lib/auth-token";
 import { loadServerAppState, saveServerAppState } from "../../../lib/server-state";
+import { notifyNewEntry } from "../../../lib/telegram";
 import type { JobEntry } from "../../../lib/types";
 
 export async function POST(request: NextRequest) {
@@ -20,6 +21,13 @@ export async function POST(request: NextRequest) {
 
     const nextState = { ...state, entries: [entry, ...state.entries] };
     const result = await saveServerAppState(nextState);
+    if (result.configured) {
+      try {
+        await notifyNewEntry(nextState, entry);
+      } catch (error) {
+        console.error("Telegram entry alert failed", error);
+      }
+    }
     return NextResponse.json({ ...result, ok: result.configured, state: nextState });
   } catch (error) {
     return NextResponse.json({ ok: false, error: errorMessage(error) }, { status: 500 });
