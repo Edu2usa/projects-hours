@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
     const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
     const claims = verifySessionToken(token);
     if (!claims) return NextResponse.json({ configured: true, error: "Unauthorized" }, { status: 401 });
+    if (!claims.admin) return NextResponse.json({ configured: true, error: "Admin required" }, { status: 403 });
     const state = await request.json() as AppState;
     const result = await saveServerAppState(state);
     return NextResponse.json({ ...result, ok: result.configured });

@@ -21,7 +21,7 @@ import { accounts as seedAccounts, demoEntries, employees as seedEmployees, serv
 import { calculateHours, flagEntry } from "../lib/hours";
 import { copy, languages } from "../lib/i18n";
 import { clearDraft, clearSession, loadAccounts, loadDraft, loadEmployees, loadEntries, loadServices, loadSession, saveAccounts, saveDraft, saveEmployees, saveEntries, saveServices, saveSession } from "../lib/storage";
-import { loadRemoteAppState, saveRemoteAppState } from "../lib/app-state";
+import { loadRemoteAppState, saveRemoteAppState, saveRemoteEntry } from "../lib/app-state";
 import type { Account, Employee, JobEntry, Language, Role, Service, Session, WorkerLine } from "../lib/types";
 
 type Screen = "quick" | "crew" | "recent" | "admin";
@@ -155,15 +155,19 @@ export default function Home() {
     setScreen("quick");
   }
 
-  function persistEntry(entry: JobEntry) {
+  async function persistEntry(entry: JobEntry) {
     const next = [entry, ...entries];
     setEntries(next);
     saveEntries(next);
-    persistAppState({ entries: next });
     clearDraft();
     setDraft(createEmptyDraft());
     const totalHours = entry.workerLines.reduce((sum, line) => sum + line.approvedHours, 0);
     setSubmitNotice(`${accountLabel(accountList, entry.accountId, entry.rawAccountText)} / ${entry.workDate} / ${totalHours.toFixed(1)} ${t.hoursLower}`);
+    const remoteState = await saveRemoteEntry(entry, session?.token);
+    if (remoteState) {
+      setEntries(remoteState.entries);
+      saveEntries(remoteState.entries);
+    }
   }
 
   if (!session) {
@@ -223,11 +227,11 @@ export default function Home() {
             submitNotice={submitNotice}
             onEdit={() => setSubmitNotice(null)}
             onSaveDraft={() => saveDraft(draft)}
-            onSubmit={(entry) => persistEntry(entry)}
+            onSubmit={(entry) => void persistEntry(entry)}
           />
         )}
         {screen === "crew" && (
-          <CrewEntry accounts={accountList} employees={employeeList} services={serviceList} language={language} session={session} onSubmit={(entry) => persistEntry(entry)} />
+          <CrewEntry accounts={accountList} employees={employeeList} services={serviceList} language={language} session={session} onSubmit={(entry) => void persistEntry(entry)} />
         )}
         {screen === "recent" && (
           <RecentEntries entries={employeeEntries} accounts={accountList} language={language} employeeId={session.employeeId} />
@@ -777,7 +781,7 @@ function AdminDashboard({ entries, setEntries, accounts, setAccounts, employees,
       <div className="grid three">
         <Stat label="Pending flags" value={flaggedEntries.length} />
         <Stat label="Period hours" value={totals.totalHours.toFixed(1)} />
-        <Stat label="Employees" value={totals.byEmployee.length} />
+        <Stat label="Employees" value={employees.filter((employee) => employee.active).length} />
       </div>
       <div className="panel grid">
         <HeaderLine

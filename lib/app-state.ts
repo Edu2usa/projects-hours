@@ -26,3 +26,17 @@ export async function saveRemoteAppState(state: AppState, token?: string) {
   });
   return response.ok;
 }
+
+export async function saveRemoteEntry(entry: JobEntry, token?: string) {
+  const response = await fetch("/api/entries", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(token ? { authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(entry)
+  });
+  if (!response.ok) return null;
+  const payload = await response.json() as { state?: AppState };
+  return payload.state ?? null;
+}
