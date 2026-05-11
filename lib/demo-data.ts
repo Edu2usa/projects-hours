@@ -1,6 +1,7 @@
 import type { Account, Employee, JobEntry, Service } from "./types";
 
 export const employees: Employee[] = [
+  { id: "ed", name: "Ed Oliveira", username: "Ed", role: "admin", active: true, preferredLanguage: "en" },
   { id: "ventura", name: "Jonathan Ventura", username: "Ventura", role: "worker", active: true, preferredLanguage: "es" },
   { id: "eusebio", name: "Eusebio Hidaldo", username: "Eusebio", role: "worker", active: true, preferredLanguage: "es" },
   { id: "jara", name: "Mario Jara", username: "Jara", role: "worker", active: true, preferredLanguage: "es" },

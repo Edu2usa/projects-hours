@@ -12,6 +12,7 @@ export type EmployeeCredential = {
 const credentialsKey = "employee_credentials";
 
 const seedEmployeeCredentials: EmployeeCredential[] = [
+  { employeeId: "ed", username: "Ed", salt: "fa3a28e2eee15234ed4ac0ede6886632", pinHash: "d42c60ffb9c3a2f1821b56b6ba7047c16fb0a5a6903f3c0e0be9a9e7d9379f56" },
   { employeeId: "ventura", username: "Ventura", salt: "d811a18364da6e265dc380e08ad972c7", pinHash: "68d496bd318c59b05e0af47f927c9db61d2cd950cf797e6b44ed45c6d2341cb3" },
   { employeeId: "eusebio", username: "Eusebio", salt: "b82f02264b4e6bebfdb57e0518028332", pinHash: "f8b7f289631d6b7f34a812ceef47a1622ec056f80b29fe4cea9edff5e2b020a6" },
   { employeeId: "jara", username: "Jara", salt: "0e6a5e48f397d8d09cd5fab186528f97", pinHash: "8ecee5fa8b74be58f5748026bf511f69d013f0c8040c29a9f2128480a353d243" },
