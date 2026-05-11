@@ -1,6 +1,7 @@
 import type { Account, Employee, JobEntry, Service } from "./types";
 
 export type AppState = {
+  version: number;
   accounts: Account[];
   employees: Employee[];
   services: Service[];

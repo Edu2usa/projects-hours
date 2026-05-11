@@ -129,6 +129,7 @@ export default function Home() {
 
   function persistAppState(nextState: Partial<{ accounts: Account[]; employees: Employee[]; services: Service[]; entries: JobEntry[] }>) {
     const state = {
+      version: 2,
       accounts: nextState.accounts ?? accountList,
       employees: nextState.employees ?? employeeList,
       services: nextState.services ?? serviceList,

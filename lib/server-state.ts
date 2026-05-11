@@ -3,8 +3,10 @@ import { getSupabaseAdmin } from "./supabase-server";
 import type { AppState } from "./app-state";
 
 const stateKey = "app_state";
+const currentStateVersion = 2;
 
 export const seedState: AppState = {
+  version: currentStateVersion,
   accounts,
   employees,
   services,
@@ -23,7 +25,7 @@ export async function loadServerAppState() {
 
   if (!isIncompleteSettingsSchemaError(valueJsonResult.error)) {
     if (valueJsonResult.error) throw valueJsonResult.error;
-    return { configured: true, state: (valueJsonResult.data?.value_json as AppState | null) ?? seedState };
+    return { configured: true, state: normalizeState((valueJsonResult.data?.value_json as AppState | null) ?? seedState) };
   }
 
   const valueResult = await supabase
@@ -36,16 +38,17 @@ export async function loadServerAppState() {
     return { configured: false, state: seedState, error: "Supabase settings table is missing a jsonb state column." };
   }
   if (valueResult.error) throw valueResult.error;
-  return { configured: true, state: (valueResult.data?.value as AppState | null) ?? seedState };
+  return { configured: true, state: normalizeState((valueResult.data?.value as AppState | null) ?? seedState) };
 }
 
 export async function saveServerAppState(state: AppState) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return { configured: false };
+  const nextState = { ...state, version: currentStateVersion };
 
   const valueJsonResult = await supabase
     .from("settings")
-    .upsert({ key: stateKey, value_json: state }, { onConflict: "key" });
+    .upsert({ key: stateKey, value_json: nextState }, { onConflict: "key" });
 
   if (!isIncompleteSettingsSchemaError(valueJsonResult.error)) {
     if (valueJsonResult.error) throw valueJsonResult.error;
@@ -54,7 +57,7 @@ export async function saveServerAppState(state: AppState) {
 
   const valueResult = await supabase
     .from("settings")
-    .upsert({ key: stateKey, value: state }, { onConflict: "key" });
+    .upsert({ key: stateKey, value: nextState }, { onConflict: "key" });
 
   if (isIncompleteSettingsSchemaError(valueResult.error)) {
     return { configured: false, error: "Supabase settings table is missing a jsonb state column." };
@@ -66,4 +69,9 @@ export async function saveServerAppState(state: AppState) {
 function isIncompleteSettingsSchemaError(error: unknown) {
   if (!error || typeof error !== "object" || !("code" in error)) return false;
   return error.code === "42703" || error.code === "PGRST204";
+}
+
+function normalizeState(state: AppState) {
+  if (state.version !== currentStateVersion) return seedState;
+  return state;
 }
