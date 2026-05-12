@@ -387,6 +387,17 @@ button {
   min-height: 40px;
 }
 
+.admin-edit-form {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.admin-worker-edit {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.2fr) repeat(3, minmax(96px, 0.7fr)) minmax(150px, 1fr);
+  align-items: center;
+}
+
 .checkline {
   display: inline-flex;
   align-items: center;
@@ -428,5 +439,9 @@ button {
 
   .worker-hours {
     width: 100%;
+  }
+
+  .admin-worker-edit {
+    grid-template-columns: 1fr;
   }
 }
