@@ -727,7 +727,9 @@ function CrewEntry({ accounts, employees, services, language, session, onSubmit 
 
 function AccountFields({ accounts, draft, update, language }: { accounts: Account[]; draft: Draft; update: (partial: Partial<Draft>) => void; language: Language }) {
   const t = copy[language];
-  const activeAccounts = accounts.filter((account) => account.active);
+  const activeAccounts = accounts
+    .filter((account) => account.active)
+    .sort((left, right) => left.canonicalName.localeCompare(right.canonicalName));
   return (
     <div className="grid">
       <div className="field">
