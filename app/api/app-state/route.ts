@@ -5,7 +5,11 @@ import type { AppState } from "../../../lib/app-state";
 
 export async function GET() {
   try {
-    return NextResponse.json(await loadServerAppState());
+    return NextResponse.json(await loadServerAppState(), {
+      headers: {
+        "cache-control": "no-store, max-age=0"
+      }
+    });
   } catch (error) {
     return NextResponse.json({ configured: true, error: errorMessage(error) }, { status: 500 });
   }
@@ -19,7 +23,11 @@ export async function POST(request: NextRequest) {
     if (!claims.admin) return NextResponse.json({ configured: true, error: "Admin required" }, { status: 403 });
     const state = await request.json() as AppState;
     const result = await saveServerAppState(state);
-    return NextResponse.json({ ...result, ok: result.configured });
+    return NextResponse.json({ ...result, ok: result.configured, state: result.configured ? state : undefined }, {
+      headers: {
+        "cache-control": "no-store, max-age=0"
+      }
+    });
   } catch (error) {
     return NextResponse.json({ configured: true, error: errorMessage(error) }, { status: 500 });
   }

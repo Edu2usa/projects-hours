@@ -9,7 +9,7 @@ export type AppState = {
 };
 
 export async function loadRemoteAppState() {
-  const response = await fetch("/api/app-state", { cache: "no-store" });
+  const response = await fetch(`/api/app-state?ts=${Date.now()}`, { cache: "no-store" });
   if (!response.ok) return null;
   const payload = await response.json() as { configured?: boolean; state?: AppState };
   return payload.configured && payload.state ? payload.state : null;
@@ -24,7 +24,9 @@ export async function saveRemoteAppState(state: AppState, token?: string) {
     },
     body: JSON.stringify(state)
   });
-  return response.ok;
+  if (!response.ok) return null;
+  const payload = await response.json() as { state?: AppState };
+  return payload.state ?? state;
 }
 
 export async function saveRemoteEntry(entry: JobEntry, token?: string) {

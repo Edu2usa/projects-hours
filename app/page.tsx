@@ -92,6 +92,7 @@ export default function Home() {
   const [serviceList, setServiceList] = useState<Service[]>(seedServices);
   const [draft, setDraft] = useState<Draft>(() => createEmptyDraft());
   const [submitNotice, setSubmitNotice] = useState<string | null>(null);
+  const [adminSaveNotice, setAdminSaveNotice] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
 
   useEffect(() => {
@@ -131,14 +132,7 @@ export default function Home() {
     loadRemoteAppState()
       .then((remoteState) => {
         if (!mounted || !remoteState) return;
-        setAccountList(remoteState.accounts);
-        setEmployeeList(remoteState.employees);
-        setServiceList(remoteState.services);
-        setEntries(remoteState.entries);
-        saveAccounts(remoteState.accounts);
-        saveEmployees(remoteState.employees);
-        saveServices(remoteState.services);
-        saveEntries(remoteState.entries);
+        applyRemoteState(remoteState);
       })
       .catch(() => undefined);
     return () => {
@@ -146,7 +140,18 @@ export default function Home() {
     };
   }, []);
 
-  function persistAppState(nextState: Partial<{ accounts: Account[]; employees: Employee[]; services: Service[]; entries: JobEntry[] }>) {
+  function applyRemoteState(remoteState: { accounts: Account[]; employees: Employee[]; services: Service[]; entries: JobEntry[] }) {
+    setAccountList(remoteState.accounts);
+    setEmployeeList(remoteState.employees);
+    setServiceList(remoteState.services);
+    setEntries(remoteState.entries);
+    saveAccounts(remoteState.accounts);
+    saveEmployees(remoteState.employees);
+    saveServices(remoteState.services);
+    saveEntries(remoteState.entries);
+  }
+
+  async function persistAppState(nextState: Partial<{ accounts: Account[]; employees: Employee[]; services: Service[]; entries: JobEntry[] }>) {
     const state = {
       version: 2,
       accounts: nextState.accounts ?? accountList,
@@ -154,7 +159,13 @@ export default function Home() {
       services: nextState.services ?? serviceList,
       entries: nextState.entries ?? entries
     };
-    void saveRemoteAppState(state, session?.token);
+    const remoteState = await saveRemoteAppState(state, session?.token);
+    if (remoteState) {
+      applyRemoteState(remoteState);
+      setAdminSaveNotice("Saved to server. Phones will see this after refresh.");
+    } else {
+      setAdminSaveNotice("Not saved to server. Log out/in as admin and try again.");
+    }
   }
 
   function cycleLanguage() {
@@ -267,7 +278,8 @@ export default function Home() {
             setServices={(next) => { setServiceList(next); saveServices(next); persistAppState({ services: next }); }}
             totals={totals}
             flaggedEntries={flaggedEntries}
-            saveAdminState={(nextState) => {
+            adminSaveNotice={adminSaveNotice}
+            saveAdminState={async (nextState) => {
               const nextAccounts = nextState.accounts ?? accountList;
               const nextEmployees = nextState.employees ?? employeeList;
               const nextServices = nextState.services ?? serviceList;
@@ -288,13 +300,19 @@ export default function Home() {
                 setEntries(nextEntries);
                 saveEntries(nextEntries);
               }
-              void saveRemoteAppState({
+              const remoteState = await saveRemoteAppState({
                 version: 2,
                 accounts: nextAccounts,
                 employees: nextEmployees,
                 services: nextServices,
                 entries: nextEntries
               }, session.token);
+              if (remoteState) {
+                applyRemoteState(remoteState);
+                setAdminSaveNotice("Saved to server. Phones will see this after refresh.");
+              } else {
+                setAdminSaveNotice("Not saved to server. Log out/in as admin and try again.");
+              }
             }}
           />
         )}
@@ -808,7 +826,7 @@ function RecentEntries({ entries, accounts, language, employeeId }: { entries: J
   );
 }
 
-function AdminDashboard({ entries, setEntries, accounts, setAccounts, employees, setEmployees, services, setServices, totals, flaggedEntries, saveAdminState }: {
+function AdminDashboard({ entries, setEntries, accounts, setAccounts, employees, setEmployees, services, setServices, totals, flaggedEntries, adminSaveNotice, saveAdminState }: {
   entries: JobEntry[];
   setEntries: (entries: JobEntry[]) => void;
   accounts: Account[];
@@ -819,7 +837,8 @@ function AdminDashboard({ entries, setEntries, accounts, setAccounts, employees,
   setServices: (services: Service[]) => void;
   totals: ReturnType<typeof summarize>;
   flaggedEntries: JobEntry[];
-  saveAdminState: (nextState: Partial<{ accounts: Account[]; employees: Employee[]; services: Service[]; entries: JobEntry[] }>) => void;
+  adminSaveNotice: string | null;
+  saveAdminState: (nextState: Partial<{ accounts: Account[]; employees: Employee[]; services: Service[]; entries: JobEntry[] }>) => void | Promise<void>;
 }) {
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<AdminEditDraft | null>(null);
@@ -967,6 +986,7 @@ function AdminDashboard({ entries, setEntries, accounts, setAccounts, employees,
 
   return (
     <section className="grid">
+      {adminSaveNotice && <div className={`feedback-banner ${adminSaveNotice.startsWith("Not saved") ? "error" : "success"}`} role="status">{adminSaveNotice}</div>}
       <div className="grid three">
         <Stat label="Pending flags" value={flaggedEntries.length} />
         <Stat label="Period hours" value={totals.totalHours.toFixed(1)} />
