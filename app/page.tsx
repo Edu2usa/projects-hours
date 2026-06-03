@@ -18,7 +18,7 @@ import {
   Users
 } from "lucide-react";
 import { accounts as seedAccounts, demoEntries, employees as seedEmployees, services as seedServices } from "../lib/demo-data";
-import { calculateHours, flagEntry } from "../lib/hours";
+import { calculateHours, flagEntry, roundApprovedHours } from "../lib/hours";
 import { copy, languages } from "../lib/i18n";
 import { clearDraft, clearSession, loadAccounts, loadDraft, loadEmployees, loadEntries, loadServices, loadSession, saveAccounts, saveDraft, saveEmployees, saveEntries, saveServices, saveSession } from "../lib/storage";
 import { loadRemoteAppState, saveRemoteAppState, saveRemoteEntry } from "../lib/app-state";
@@ -415,7 +415,7 @@ function QuickEntry({ accounts, services, draft, setDraft, language, session, su
   const t = copy[language];
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const calculated = calculateHours(draft.startTime, draft.finishTime);
-  const approved = draft.overrideHours ? Number(draft.overrideHours) : calculated;
+  const approved = draft.overrideHours ? roundApprovedHours(Number(draft.overrideHours)) : calculated;
   const selectedOtherAccount = draft.accountId === "other";
   const flags = flagEntry({
     rawAccountText: selectedOtherAccount ? draft.rawAccountText : undefined,
@@ -581,7 +581,7 @@ function CrewEntry({ accounts, employees, services, language, session, onSubmit 
     const selectedOtherAccount = draft.accountId === "other";
     const hasAccount = draft.accountId && (!selectedOtherAccount || draft.rawAccountText.trim().length > 0);
     const hasService = draft.serviceIds.filter(Boolean).length > 0 || draft.rawServiceText.trim().length > 0;
-    const approved = draft.overrideHours ? Number(draft.overrideHours) : calculated;
+    const approved = draft.overrideHours ? roundApprovedHours(Number(draft.overrideHours)) : calculated;
     if (!hasAccount) {
       setFeedback(t.missingAccount);
       setStep(1);
@@ -639,7 +639,7 @@ function CrewEntry({ accounts, employees, services, language, session, onSubmit 
       status: flags.length ? "flagged" : "approved",
       flags,
       workerLines: workerIds.map((id) => {
-        const workerApproved = workerHours[id] ? Number(workerHours[id]) : approved;
+        const workerApproved = workerHours[id] ? roundApprovedHours(Number(workerHours[id])) : approved;
         return buildLine(id, draft.startTime, draft.finishTime, workerApproved, Boolean(draft.overrideHours) || Boolean(workerHours[id]), workerHours[id] ? "Crew worker hour override" : draft.overrideReason);
       }),
       createdAt: new Date().toISOString()
@@ -692,6 +692,10 @@ function CrewEntry({ accounts, employees, services, language, session, onSubmit 
                       inputMode="decimal"
                       value={workerHours[workerId] ?? ""}
                       onChange={(event) => updateWorkerHours(workerId, event.target.value)}
+                      onBlur={(event) => {
+                        const rounded = roundApprovedHours(Number(event.target.value));
+                        if (Number.isFinite(rounded) && rounded > 0) updateWorkerHours(workerId, String(rounded));
+                      }}
                       placeholder={`${calculated.toFixed(1)} ${t.hoursLower}`}
                       aria-label={`${employee?.name ?? workerId} ${t.hours}`}
                     />
@@ -761,7 +765,7 @@ function TimeFields({ draft, update, calculated, language }: { draft: Draft; upd
       </div>
       <div className="field">
         <label>{t.hours}</label>
-        <input className="input" aria-label={t.hours} value={draft.startTime && draft.finishTime ? `${draft.overrideHours || calculated} ${t.hoursLower}` : ""} placeholder={`0 ${t.hoursLower}`} readOnly />
+        <input className="input" aria-label={t.hours} value={draft.startTime && draft.finishTime ? `${draft.overrideHours ? roundApprovedHours(Number(draft.overrideHours)) : calculated} ${t.hoursLower}` : ""} placeholder={`0 ${t.hoursLower}`} readOnly />
       </div>
       <div className="field">
         <label>{t.start}</label>
@@ -773,7 +777,18 @@ function TimeFields({ draft, update, calculated, language }: { draft: Draft; upd
       </div>
       <div className="field">
         <label>{t.override}</label>
-        <input className="input" inputMode="decimal" value={draft.overrideHours} onChange={(event) => update({ overrideHours: event.target.value })} placeholder={t.optional} aria-label={t.override} />
+        <input
+          className="input"
+          inputMode="decimal"
+          value={draft.overrideHours}
+          onChange={(event) => update({ overrideHours: event.target.value })}
+          onBlur={(event) => {
+            const rounded = roundApprovedHours(Number(event.target.value));
+            if (Number.isFinite(rounded) && rounded > 0) update({ overrideHours: String(rounded) });
+          }}
+          placeholder={t.optional}
+          aria-label={t.override}
+        />
       </div>
       <div className="field">
         <label>{t.reason}</label>
@@ -909,7 +924,7 @@ function AdminDashboard({ entries, setEntries, accounts, setAccounts, employees,
     }
 
     const nextWorkerLines = editDraft.workerLines.map((line) => {
-      const approvedHours = Number.parseFloat(line.approvedHours);
+      const approvedHours = roundApprovedHours(Number.parseFloat(line.approvedHours));
       const calculatedHours = calculateHours(line.startTime, line.finishTime);
       const manualOverride = Number.isFinite(approvedHours) && Math.abs(approvedHours - calculatedHours) > 0.01;
       return {
@@ -1097,7 +1112,17 @@ function AdminDashboard({ entries, setEntries, accounts, setAccounts, employees,
                         </select>
                         <input className="input" type="time" value={line.startTime} onChange={(event) => updateWorkerLine(line.id, { startTime: event.target.value })} aria-label="Start time" />
                         <input className="input" type="time" value={line.finishTime} onChange={(event) => updateWorkerLine(line.id, { finishTime: event.target.value })} aria-label="Finish time" />
-                        <input className="input" inputMode="decimal" value={line.approvedHours} onChange={(event) => updateWorkerLine(line.id, { approvedHours: event.target.value })} aria-label="Approved hours" />
+                        <input
+                          className="input"
+                          inputMode="decimal"
+                          value={line.approvedHours}
+                          onChange={(event) => updateWorkerLine(line.id, { approvedHours: event.target.value })}
+                          onBlur={(event) => {
+                            const rounded = roundApprovedHours(Number(event.target.value));
+                            if (Number.isFinite(rounded) && rounded > 0) updateWorkerLine(line.id, { approvedHours: String(rounded) });
+                          }}
+                          aria-label="Approved hours"
+                        />
                         <input className="input" value={line.overrideReason} onChange={(event) => updateWorkerLine(line.id, { overrideReason: event.target.value })} placeholder="Reason/note" aria-label="Override reason" />
                       </div>
                     ))}
