@@ -10,14 +10,13 @@ import { AccountFields, ServiceFields, TimeFields } from "./EntryFields";
 import { buildLine } from "./helpers";
 import { HeaderLine } from "./ui";
 
-export function QuickEntry({ accounts, services, draft, setDraft, language, session, submitNotice, onSaveDraft, onSubmit }: {
+export function QuickEntry({ accounts, services, draft, setDraft, language, session, onSaveDraft, onSubmit }: {
   accounts: Account[];
   services: Service[];
   draft: Draft;
   setDraft: (draft: Draft) => void;
   language: Language;
   session: Session;
-  submitNotice: string | null;
   onSaveDraft: () => void;
   onSubmit: (entry: JobEntry) => void;
 }) {
@@ -86,16 +85,6 @@ export function QuickEntry({ accounts, services, draft, setDraft, language, sess
   return (
     <section className="panel grid">
       <HeaderLine title={t.quick} subtitle={t.quickSubtitle} right={<span className={`badge ${flags.length ? "warn" : ""}`}>{flags.length ? `${flags.length} ${t.flags.toLowerCase()}` : t.clean}</span>} />
-      {submitNotice && (
-        <div className="success-banner" role="status" aria-live="polite">
-          <Check size={20} />
-          <div>
-            <strong>{t.submitted}</strong>
-            <span>{submitNotice}</span>
-            <small>{t.readyNext}</small>
-          </div>
-        </div>
-      )}
       {feedback && (
         <div className={`feedback-banner ${feedback.type}`} role="status" aria-live="polite">
           {feedback.type === "success" ? <Check size={18} /> : <AlertTriangle size={18} />}

@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarRange, LogOut, Send, ShieldCheck, Users } from "lucide-react";
+import { AlertTriangle, CalendarRange, Check, LogOut, Send, ShieldCheck, Users } from "lucide-react";
 import { accounts as seedAccounts, demoEntries, employees as seedEmployees, services as seedServices } from "../lib/demo-data";
 import { copy, languages } from "../lib/i18n";
 import { clearDraft, clearSession, loadAccounts, loadDraft, loadEmployees, loadEntries, loadServices, loadSession, saveAccounts, saveDraft, saveEmployees, saveEntries, saveServices, saveSession } from "../lib/storage";
-import { loadRemoteAppState, saveRemoteAppState, saveRemoteEntry } from "../lib/app-state";
+import { isSessionTokenExpired, loadRemoteAppState, saveRemoteAppState, saveRemoteEntry } from "../lib/app-state";
 import type { Account, Employee, JobEntry, Language, Service, Session } from "../lib/types";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { CrewEntry } from "./components/CrewEntry";
@@ -25,7 +25,7 @@ export default function Home() {
   const [employeeList, setEmployeeList] = useState<Employee[]>(seedEmployees);
   const [serviceList, setServiceList] = useState<Service[]>(seedServices);
   const [draft, setDraft] = useState<Draft>(() => createEmptyDraft());
-  const [submitNotice, setSubmitNotice] = useState<string | null>(null);
+  const [submitNotice, setSubmitNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [adminSaveNotice, setAdminSaveNotice] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
 
@@ -36,7 +36,7 @@ export default function Home() {
     setServiceList(loadServices(seedServices));
     const savedSession = loadSession();
     const savedDraft = loadDraft<Draft>();
-    if (savedSession?.token) {
+    if (savedSession?.token && !isSessionTokenExpired(savedSession.token)) {
       setSession(savedSession);
       setLanguage(savedSession.language);
       setScreen(savedSession.admin ? "admin" : "quick");
@@ -120,28 +120,70 @@ export default function Home() {
   }
 
   async function persistEntry(entry: JobEntry) {
-    const next = [entry, ...entries];
-    setEntries(next);
-    saveEntries(next);
-    clearDraft();
-    setDraft(createEmptyDraft());
     const totalHours = entry.workerLines.reduce((sum, line) => sum + line.approvedHours, 0);
-    setSubmitNotice(`${accountLabel(accountList, entry.accountId, entry.rawAccountText)} / ${entry.workDate} / ${totalHours.toFixed(1)} ${t.hoursLower}`);
-    const remoteState = await saveRemoteEntry(entry, session?.token);
-    if (remoteState) {
-      setEntries(remoteState.entries);
-      saveEntries(remoteState.entries);
+    const summary = `${accountLabel(accountList, entry.accountId, entry.rawAccountText)} / ${entry.workDate} / ${totalHours.toFixed(1)} ${t.hoursLower}`;
+    const result = await saveRemoteEntry(entry, session?.token);
+
+    if (result.ok && result.state) {
+      setEntries(result.state.entries);
+      saveEntries(result.state.entries);
+      clearDraft();
+      setDraft(createEmptyDraft());
+      setSubmitNotice({ type: "success", text: summary });
+      return;
     }
+
+    if (result.status === 0) {
+      // Offline: keep the entry locally so it is not lost, same as before.
+      const next = [entry, ...entries];
+      setEntries(next);
+      saveEntries(next);
+      clearDraft();
+      setDraft(createEmptyDraft());
+      setSubmitNotice({ type: "success", text: `${summary} (${t.offlineDraftSaved})` });
+      return;
+    }
+
+    if (result.status === 401) {
+      // Session expired: keep the draft, force a fresh login, and say so loudly.
+      saveDraft(draft);
+      setSubmitNotice({ type: "error", text: t.sessionExpired });
+      clearSession();
+      setSession(null);
+      return;
+    }
+
+    setSubmitNotice({ type: "error", text: result.error ? `${t.entrySaveFailed} (${result.error})` : t.entrySaveFailed });
   }
+
+  const submitBanner = submitNotice && (
+    submitNotice.type === "success" ? (
+      <div className="success-banner" role="status" aria-live="polite">
+        <Check size={20} />
+        <div>
+          <strong>{t.submitted}</strong>
+          <span>{submitNotice.text}</span>
+          <small>{t.readyNext}</small>
+        </div>
+      </div>
+    ) : (
+      <div className="feedback-banner error" role="alert" aria-live="assertive">
+        <AlertTriangle size={18} />
+        <span>{submitNotice.text}</span>
+      </div>
+    )
+  );
 
   if (!session) {
     return (
       <Shell language={language} onLanguage={cycleLanguage}>
+        {submitNotice?.type === "error" && <main className="main">{submitBanner}</main>}
         <Login language={language} onLogin={(next) => {
           setSession(next);
           setLanguage(next.language);
           saveSession(next);
           setScreen(next.admin ? "admin" : "quick");
+          if (submitNotice?.type === "error") setSubmitNotice(null);
         }} />
       </Shell>
     );
@@ -161,6 +203,7 @@ export default function Home() {
       }
     >
       <main className="main grid">
+        {submitBanner}
         <section className="tabs">
           <button className={`tab ${screen === "quick" ? "active" : ""}`} onClick={() => setScreen("quick")}>
             <Send size={18} /> {t.quick}
@@ -188,7 +231,6 @@ export default function Home() {
             setDraft={setDraft}
             language={language}
             session={session}
-            submitNotice={submitNotice}
             onSaveDraft={() => saveDraft(draft)}
             onSubmit={(entry) => void persistEntry(entry)}
           />
