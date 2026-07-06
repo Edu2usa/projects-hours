@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySessionToken } from "../../../lib/auth-token";
+import { appStateSchema, describeZodError } from "../../../lib/app-state-schema";
 import { loadServerAppState, saveServerAppState } from "../../../lib/server-state";
 import type { AppState } from "../../../lib/app-state";
 
@@ -21,7 +22,11 @@ export async function POST(request: NextRequest) {
     const claims = verifySessionToken(token);
     if (!claims) return NextResponse.json({ configured: true, error: "Unauthorized" }, { status: 401 });
     if (!claims.admin) return NextResponse.json({ configured: true, error: "Admin required" }, { status: 403 });
-    const state = await request.json() as AppState;
+    const parsed = appStateSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ configured: true, ok: false, error: describeZodError(parsed.error) }, { status: 400 });
+    }
+    const state = parsed.data as AppState;
     const result = await saveServerAppState(state);
     return NextResponse.json({ ...result, ok: result.configured, state: result.configured ? state : undefined }, {
       headers: {

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySessionToken } from "../../../lib/auth-token";
+import { jobEntrySchema, describeZodError } from "../../../lib/app-state-schema";
 import { loadServerAppState, saveServerAppState } from "../../../lib/server-state";
 import { notifyNewEntry } from "../../../lib/telegram";
 import type { JobEntry } from "../../../lib/types";
+
+const maxSaveAttempts = 4;
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,25 +13,38 @@ export async function POST(request: NextRequest) {
     const claims = verifySessionToken(token);
     if (!claims) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
-    const entry = await request.json() as JobEntry;
+    const parsed = jobEntrySchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ ok: false, error: describeZodError(parsed.error) }, { status: 400 });
+    }
+    const entry = parsed.data as JobEntry;
     const validation = validateEntry(entry, claims);
     if (validation) return NextResponse.json({ ok: false, error: validation }, { status: 400 });
 
-    const { state } = await loadServerAppState();
-    if (isExactDuplicate(state.entries, entry)) {
-      return NextResponse.json({ ok: false, error: "Duplicate entry" }, { status: 409 });
+    // Optimistic-locking retry loop: if another submission saved between our load and
+    // save, the conditional write reports a conflict and we reload and reapply, so
+    // concurrent entries are never silently dropped.
+    for (let attempt = 0; attempt < maxSaveAttempts; attempt++) {
+      const { state, revision } = await loadServerAppState();
+      if (isExactDuplicate(state.entries, entry)) {
+        return NextResponse.json({ ok: false, error: "Duplicate entry" }, { status: 409 });
+      }
+
+      const nextState = { ...state, entries: [entry, ...state.entries] };
+      const result = await saveServerAppState(nextState, revision);
+      if (result.conflict) continue;
+
+      if (result.configured) {
+        try {
+          await notifyNewEntry(nextState, entry);
+        } catch (error) {
+          console.error("Telegram entry alert failed", error);
+        }
+      }
+      return NextResponse.json({ ...result, ok: result.configured, state: nextState });
     }
 
-    const nextState = { ...state, entries: [entry, ...state.entries] };
-    const result = await saveServerAppState(nextState);
-    if (result.configured) {
-      try {
-        await notifyNewEntry(nextState, entry);
-      } catch (error) {
-        console.error("Telegram entry alert failed", error);
-      }
-    }
-    return NextResponse.json({ ...result, ok: result.configured, state: nextState });
+    return NextResponse.json({ ok: false, error: "Server was busy saving entries. Try again." }, { status: 503 });
   } catch (error) {
     return NextResponse.json({ ok: false, error: errorMessage(error) }, { status: 500 });
   }
