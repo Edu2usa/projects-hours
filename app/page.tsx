@@ -6,6 +6,7 @@ import { accounts as seedAccounts, demoEntries, employees as seedEmployees, serv
 import { copy, languages } from "../lib/i18n";
 import { clearDraft, clearSession, loadAccounts, loadDraft, loadEmployees, loadEntries, loadServices, loadSession, saveAccounts, saveDraft, saveEmployees, saveEntries, saveServices, saveSession } from "../lib/storage";
 import { isSessionTokenExpired, loadRemoteAppState, saveRemoteAppState, saveRemoteEntry } from "../lib/app-state";
+import { currentPayrollPeriod, isInPeriod } from "../lib/payroll";
 import type { Account, Employee, JobEntry, Language, Service, Session } from "../lib/types";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { CrewEntry } from "./components/CrewEntry";
@@ -59,7 +60,11 @@ export default function Home() {
   const currentEmployee = employeeList.find((employee) => employee.id === session?.employeeId);
   const employeeEntries = entries.filter((entry) => entry.workerLines.some((line) => line.employeeId === session?.employeeId));
   const flaggedEntries = entries.filter((entry) => entry.flags.length || entry.status !== "approved" || entry.rawAccountText || entry.rawServiceText);
-  const totals = useMemo(() => summarize(entries, accountList, employeeList, serviceList), [entries, accountList, employeeList, serviceList]);
+  const payrollPeriod = useMemo(() => currentPayrollPeriod(), []);
+  const totals = useMemo(
+    () => summarize(entries.filter((entry) => isInPeriod(entry.workDate, payrollPeriod)), accountList, employeeList, serviceList),
+    [entries, accountList, employeeList, serviceList, payrollPeriod]
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -252,6 +257,7 @@ export default function Home() {
             services={serviceList}
             setServices={(next) => { setServiceList(next); saveServices(next); persistAppState({ services: next }); }}
             totals={totals}
+            payrollPeriod={payrollPeriod}
             flaggedEntries={flaggedEntries}
             adminSaveNotice={adminSaveNotice}
             saveAdminState={async (nextState) => {

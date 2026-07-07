@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, Download, FileSpreadsheet, FileText, Search } from "lucide-react";
 import { calculateHours, flagEntry, roundApprovedHours } from "../../lib/hours";
+import { formatDisplayDate, type PayrollPeriod } from "../../lib/payroll";
 import type { Account, Employee, JobEntry, Service } from "../../lib/types";
 import { AccountManager } from "./AccountManager";
 import type { AdminEditDraft } from "./drafts";
@@ -11,7 +12,7 @@ import { accountLabel, normalizeName, serviceSummary, uniqueAccountId, type Tota
 import { ServiceManager } from "./ServiceManager";
 import { HeaderLine, ReportList, Stat } from "./ui";
 
-export function AdminDashboard({ entries, setEntries, accounts, setAccounts, employees, setEmployees, services, setServices, totals, flaggedEntries, adminSaveNotice, saveAdminState }: {
+export function AdminDashboard({ entries, setEntries, accounts, setAccounts, employees, setEmployees, services, setServices, totals, payrollPeriod, flaggedEntries, adminSaveNotice, saveAdminState }: {
   entries: JobEntry[];
   setEntries: (entries: JobEntry[]) => void;
   accounts: Account[];
@@ -21,6 +22,7 @@ export function AdminDashboard({ entries, setEntries, accounts, setAccounts, emp
   services: Service[];
   setServices: (services: Service[]) => void;
   totals: Totals;
+  payrollPeriod: PayrollPeriod;
   flaggedEntries: JobEntry[];
   adminSaveNotice: string | null;
   saveAdminState: (nextState: Partial<{ accounts: Account[]; employees: Employee[]; services: Service[]; entries: JobEntry[] }>) => void | Promise<void>;
@@ -174,21 +176,30 @@ export function AdminDashboard({ entries, setEntries, accounts, setAccounts, emp
       {adminSaveNotice && <div className={`feedback-banner ${adminSaveNotice.startsWith("Not saved") ? "error" : "success"}`} role="status">{adminSaveNotice}</div>}
       <div className="grid three">
         <Stat label="Pending flags" value={flaggedEntries.length} />
-        <Stat label="Period hours" value={totals.totalHours.toFixed(1)} />
+        <Stat label={`Payroll hours (${payrollPeriod.label})`} value={totals.totalHours.toFixed(1)} />
         <Stat label="Employees" value={employees.filter((employee) => employee.active).length} />
       </div>
       <div className="panel grid">
         <HeaderLine
-          title="Payroll close"
-          subtitle="Resolve flags, classify REG/OT/DT, then export."
+          title={`Payroll ${payrollPeriod.label}`}
+          subtitle={`Week 1 ends ${formatDisplayDate(payrollPeriod.week1End)}, week 2 ends ${formatDisplayDate(payrollPeriod.end)}. Hours dated after ${formatDisplayDate(payrollPeriod.end)} go to the next payroll. Resolve flags, classify REG/OT/DT, then export.`}
           right={
             <div className="segmented">
-              <a className="secondary" href="/api/export/report" target="_blank" rel="noreferrer"><FileText size={18} /> Report</a>
-              <a className="secondary" href="/api/export/excel"><FileSpreadsheet size={18} /> Excel</a>
-              <a className="secondary" href="/api/export/pdf"><Download size={18} /> PDF</a>
+              <a className="secondary" href={`/api/export/report?period=${payrollPeriod.end}`} target="_blank" rel="noreferrer"><FileText size={18} /> Report</a>
+              <a className="secondary" href={`/api/export/excel?period=${payrollPeriod.end}`}><FileSpreadsheet size={18} /> Excel</a>
+              <a className="secondary" href={`/api/export/pdf?period=${payrollPeriod.end}`}><Download size={18} /> PDF</a>
             </div>
           }
         />
+        <div className="row">
+          <span className="small muted">Last payroll (closed):</span>
+          <div className="segmented master-data-actions">
+            <a className="secondary" href="/api/export/report?period=previous" target="_blank" rel="noreferrer">Report</a>
+            <a className="secondary" href="/api/export/excel?period=previous">Excel</a>
+            <a className="secondary" href="/api/export/pdf?period=previous">PDF</a>
+            <a className="secondary" href="/api/export/excel?period=all">All history (Excel)</a>
+          </div>
+        </div>
         <div className="grid three">
           <ReportList title="By employee" rows={totals.byEmployee} />
           <ReportList title="By account" rows={totals.byAccount} />

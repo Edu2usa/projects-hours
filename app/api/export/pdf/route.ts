@@ -1,11 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { jsPDF } from "jspdf";
+import { formatDisplayDate, isInPeriod, resolvePeriodParam } from "../../../../lib/payroll";
 import { loadServerAppState } from "../../../../lib/server-state";
 import type { Account, Service } from "../../../../lib/types";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const { state } = await loadServerAppState();
-  const { accounts, employees, entries, services } = state;
+  const { accounts, employees, services } = state;
+  const period = resolvePeriodParam(request.nextUrl.searchParams.get("period"));
+  const entries = period ? state.entries.filter((entry) => isInPeriod(entry.workDate, period)) : state.entries;
   const doc = new jsPDF();
   doc.setFillColor(31, 79, 70);
   doc.rect(0, 0, 210, 28, "F");
@@ -19,7 +22,10 @@ export async function GET() {
   doc.setFontSize(11);
   let y = 40;
   const totalHours = entries.flatMap((entry) => entry.workerLines).reduce((sum, line) => sum + line.approvedHours, 0);
-  doc.text(`Date range: Current preview period`, 14, y);
+  const rangeText = period
+    ? `Payroll period: ${period.label} (weeks ending ${formatDisplayDate(period.week1End)} and ${formatDisplayDate(period.end)})`
+    : "Date range: All history";
+  doc.text(rangeText, 14, y);
   y += 8;
   doc.text(`Total hours: ${totalHours.toFixed(1)}`, 14, y);
   y += 12;
@@ -48,7 +54,7 @@ export async function GET() {
   return new NextResponse(buffer, {
     headers: {
       "content-type": "application/pdf",
-      "content-disposition": "attachment; filename=preferred-maintenance-hours-report.pdf"
+      "content-disposition": `attachment; filename=preferred-maintenance-payroll-${period ? `${period.start}_to_${period.end}` : "all-history"}.pdf`
     }
   });
 }

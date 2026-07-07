@@ -1,3 +1,4 @@
+import { formatDisplayDate, isInPeriod, latestFridayPayrollPeriod } from "./payroll";
 import type { AppState } from "./app-state";
 import type { Account, Employee, JobEntry, Service, WorkerLine } from "./types";
 
@@ -6,12 +7,6 @@ type TelegramResult = {
   ok: boolean;
   status?: number;
   error?: string;
-};
-
-type ReportRange = {
-  start: string;
-  end: string;
-  label: string;
 };
 
 export async function sendTelegramMessage(text: string, chatIds = telegramChatIds("entry")) {
@@ -45,8 +40,7 @@ export async function notifyNewEntry(state: AppState, entry: JobEntry) {
 }
 
 export async function notifyWeeklyReport(state: AppState, origin: string) {
-  const range = previousSevenDayRange();
-  const message = formatWeeklyReport(state, range, origin);
+  const message = formatWeeklyReport(state, origin);
   return sendTelegramMessage(message, telegramChatIds("report"));
 }
 
@@ -89,8 +83,12 @@ function formatEntryAlert(state: AppState, entry: JobEntry) {
   ].join("\n");
 }
 
-function formatWeeklyReport(state: AppState, range: ReportRange, origin: string) {
-  const rangeEntries = state.entries.filter((entry) => entry.workDate >= range.start && entry.workDate <= range.end);
+function formatWeeklyReport(state: AppState, origin: string) {
+  // Report on the payroll period containing the most recent Friday: on the
+  // Monday after a period closes that is the finished payroll, mid-period it
+  // is the running payroll with week 1 complete.
+  const { period, closed } = latestFridayPayrollPeriod();
+  const rangeEntries = state.entries.filter((entry) => isInPeriod(entry.workDate, period));
   const lines = rangeEntries.flatMap((entry) => entry.workerLines.map((line) => ({ entry, line })));
   const cleanLines = lines.filter(({ entry }) => entry.status === "approved" && entry.flags.length === 0);
   const reviewLines = lines.filter(({ entry }) => entry.status !== "approved" || entry.flags.length > 0);
@@ -98,13 +96,16 @@ function formatWeeklyReport(state: AppState, range: ReportRange, origin: string)
   const byAccount = topGroups(cleanLines, ({ entry }) => accountName(state.accounts, entry.accountId, entry.rawAccountText));
   const cleanHours = sum(cleanLines.map(({ line }) => line.approvedHours));
   const reviewHours = sum(reviewLines.map(({ line }) => line.approvedHours));
-  const reportUrl = `${origin}/api/export/report`;
-  const excelUrl = `${origin}/api/export/excel`;
-  const pdfUrl = `${origin}/api/export/pdf`;
+  const reportUrl = `${origin}/api/export/report?period=${period.end}`;
+  const excelUrl = `${origin}/api/export/excel?period=${period.end}`;
+  const pdfUrl = `${origin}/api/export/pdf?period=${period.end}`;
 
   return [
-    `Preferred Maintenance - Weekly hours report`,
-    range.label,
+    `Preferred Maintenance - Biweekly payroll report`,
+    `Payroll period: ${period.label}`,
+    closed
+      ? `Status: CLOSED ${formatDisplayDate(period.end)} - ready for payroll`
+      : `Status: week 1 complete (ended ${formatDisplayDate(period.week1End)}), week 2 ends ${formatDisplayDate(period.end)}`,
     `Entries: ${rangeEntries.length}`,
     `Clean hours: ${cleanHours.toFixed(2)}`,
     `Review hold hours: ${reviewHours.toFixed(2)}`,
@@ -121,20 +122,6 @@ function formatWeeklyReport(state: AppState, range: ReportRange, origin: string)
   ].join("\n");
 }
 
-function previousSevenDayRange(date = new Date()) {
-  const endDate = new Date(date);
-  endDate.setDate(endDate.getDate() - 1);
-  const startDate = new Date(endDate);
-  startDate.setDate(startDate.getDate() - 6);
-  const start = isoDate(startDate);
-  const end = isoDate(endDate);
-  return {
-    start,
-    end,
-    label: `${formatDisplayDate(start)} to ${formatDisplayDate(end)}`
-  };
-}
-
 function topGroups<T extends { line: WorkerLine; entry: JobEntry }>(lines: T[], nameFor: (line: T) => string) {
   const map = new Map<string, number>();
   for (const item of lines) {
@@ -145,15 +132,6 @@ function topGroups<T extends { line: WorkerLine; entry: JobEntry }>(lines: T[], 
     .map(([name, hours]) => ({ name, hours: sum([hours]) }))
     .sort((left, right) => right.hours - left.hours)
     .slice(0, 8);
-}
-
-function isoDate(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function formatDisplayDate(value: string) {
-  const [year, month, day] = value.split("-");
-  return `${month}/${day}/${year}`;
 }
 
 function formatTime(value: string) {

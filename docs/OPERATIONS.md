@@ -1,5 +1,18 @@
 # Operations
 
+## Payroll periods
+
+Payroll runs biweekly: 14-day periods ending every other Friday, anchored at the period that closed with week 1 ending 6/26/2026 and week 2 ending 7/3/2026 (`anchorPeriodEnd` in `lib/payroll.ts`). Hours are assigned to a payroll by their **work date** — anything dated 7/4/2026 or later belongs to the 7/4-7/17 payroll, and so on.
+
+All exports accept a `?period=` query parameter:
+
+- `current` (default) - the payroll period containing today (America/New_York)
+- `previous` - the most recently closed payroll
+- `all` - full history, no filter
+- any `YYYY-MM-DD` date - the payroll period containing that date
+
+The Excel export includes a "Payroll Period" cover sheet plus Week 1/Week 2 hour columns in the payroll summary. The Monday Telegram report covers the payroll period containing the most recent Friday: right after a close it reports the finished payroll (marked CLOSED - ready for payroll); mid-period it reports week 1 progress.
+
 ## Supabase
 
 Run `supabase/schema.sql` in the SQL editor for the project. Then create a private storage bucket named `job-attachments`.
