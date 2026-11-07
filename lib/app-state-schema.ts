@@ -45,7 +45,7 @@ const workerLineSchema = z.object({
 }).passthrough();
 
 export const jobEntrySchema = z.object({
-  id: z.string().min(1),
+  id: z.string().min(1).max(200),
   submittedByEmployeeId: z.string().min(1),
   accountId: z.string().nullish(),
   rawAccountText: z.string().nullish(),

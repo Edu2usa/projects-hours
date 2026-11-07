@@ -2,6 +2,8 @@ import { accounts, demoEntries, employees, services } from "./demo-data";
 import { getSupabaseAdmin } from "./supabase-server";
 import type { AppState } from "./app-state";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { JobEntry } from "./types";
+import { entryDeliveryId, entryEmailEnabled, formatEntryEmail } from "./entry-email-message";
 
 const stateKey = "app_state";
 const currentStateVersion = 2;
@@ -25,9 +27,27 @@ export type LoadResult = {
 export type SaveResult = {
   configured: boolean;
   conflict?: boolean;
+  duplicate?: boolean;
   revision?: string;
   error?: string;
 };
+
+export async function saveServerEntry(state: AppState, entry: JobEntry, expectedRevision: string | null): Promise<SaveResult> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return { configured: false };
+  const enabled = entryEmailEnabled();
+  const { data, error } = await supabase.rpc("save_hours_entry_with_email", {
+    p_entry: entry,
+    p_expected_revision: expectedRevision,
+    p_email_enabled: enabled,
+    p_delivery_id: enabled ? entryDeliveryId(entry.id) : null,
+    p_message_text: enabled ? formatEntryEmail(state, entry) : null
+  });
+  // No nontransactional fallback: a deployment with a missing migration must not
+  // acknowledge a save that silently skipped its required durable email copy.
+  if (error) throw new Error("Hours could not be saved. Please try again.");
+  return data as SaveResult;
+}
 
 export async function loadServerAppState(): Promise<LoadResult> {
   const supabase = getSupabaseAdmin();

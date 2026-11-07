@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySessionToken } from "../../../lib/auth-token";
 import { jobEntrySchema, describeZodError } from "../../../lib/app-state-schema";
-import { loadServerAppState, saveServerAppState } from "../../../lib/server-state";
+import { loadServerAppState, saveServerEntry } from "../../../lib/server-state";
 import { notifyNewEntry } from "../../../lib/telegram";
 import type { JobEntry } from "../../../lib/types";
 
@@ -26,19 +26,20 @@ export async function POST(request: NextRequest) {
     // concurrent entries are never silently dropped.
     for (let attempt = 0; attempt < maxSaveAttempts; attempt++) {
       const { state, revision } = await loadServerAppState();
-      if (isExactDuplicate(state.entries, entry)) {
+      if (state.entries.some((existing) => existing.id === entry.id) || isExactDuplicate(state.entries, entry)) {
         return NextResponse.json({ ok: false, error: "Duplicate entry" }, { status: 409 });
       }
 
       const nextState = { ...state, entries: [entry, ...state.entries] };
-      const result = await saveServerAppState(nextState, revision);
+      const result = await saveServerEntry(state, entry, revision);
       if (result.conflict) continue;
+      if (result.duplicate) return NextResponse.json({ ok: false, error: "Duplicate entry" }, { status: 409 });
 
       if (result.configured) {
         try {
           await notifyNewEntry(nextState, entry);
         } catch (error) {
-          console.error("Telegram entry alert failed", error);
+          console.error("Telegram entry alert failed");
         }
       }
       return NextResponse.json({ ...result, ok: result.configured, state: nextState });

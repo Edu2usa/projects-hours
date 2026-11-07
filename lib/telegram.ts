@@ -71,6 +71,7 @@ function formatEntryAlert(state: AppState, entry: JobEntry) {
 
   return [
     "Preferred Maintenance - New hours entry",
+    `Submission ID: ${entry.id}`,
     `Submitted by: ${submitter}`,
     `Date: ${formatDisplayDate(entry.workDate)}`,
     `Account/site: ${account}`,

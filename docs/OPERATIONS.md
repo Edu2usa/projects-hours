@@ -41,6 +41,13 @@ Set these environment variables:
 
 Connect Vercel to `https://github.com/Edu2usa/projects-hours` and deploy the default branch.
 
+## Gmail submission copies
+
+See [ENTRY_EMAIL.md](ENTRY_EMAIL.md) for the additive database migration,
+fail-closed enable flag, existing Google relay configuration, authenticated
+ten-minute retry schedule, privacy boundaries, and non-destructive rollback.
+The migration must be installed before deploying the new entry-save RPC path.
+
 ## Telegram
 
 The server sends a Telegram alert after `/api/entries` accepts a new hours entry. The weekly report is scheduled in `vercel.json` for Monday 8:00 AM Eastern during daylight saving time (`0 12 * * 1` UTC).
