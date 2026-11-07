@@ -10,7 +10,7 @@ export type EmailClaim = {
   message_text: string;
   lease_token: string;
 };
-export type DeliveryOutcome = { outcome: "sent" | "retry" | "needs_review"; errorCode?: string };
+export type DeliveryOutcome = { outcome: "sent" | "retry" | "needs_review"; errorCode?: string; providerId?: string };
 export type RelayConfig = { url: string; secret: string };
 
 export function relayConfig(): RelayConfig | null {
@@ -79,7 +79,7 @@ export async function deliverEntryEmail(claim: EmailClaim, config: RelayConfig, 
     }
     const data = await readReceipt(response);
     if (!data || data.deliveryId !== claim.delivery_id) return { outcome: "needs_review", errorCode: "invalid_relay_receipt" };
-    if (data.status === "sent" && typeof data.providerId === "string" && data.providerId.length > 0) return { outcome: "sent" };
+    if (data.status === "sent" && typeof data.providerId === "string" && data.providerId.length > 0 && data.providerId.length <= 200) return { outcome: "sent", providerId: data.providerId };
     if (data.status === "retry" || data.status === "needs_review") {
       return { outcome: data.status, errorCode: safeErrorCode(data.errorCode) };
     }

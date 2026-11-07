@@ -111,6 +111,7 @@ test("cron persists sent, retry and Gmail uncertainty independently and returns 
   const completed: string[] = [];
   global.fetch = async (url, init) => {
     const target = String(url); const body = JSON.parse(String(init?.body));
+    if (target.endsWith("/rpc/claim_notification_tests")) return json([]);
     if (target.endsWith("/rpc/claim_entry_emails")) return json(claims);
     if (target.startsWith("https://script.google.com/")) {
       const payload = JSON.parse(body.payload);
@@ -123,7 +124,7 @@ test("cron persists sent, retry and Gmail uncertainty independently and returns 
   try {
     const result = await emailCron(cron(`Bearer ${process.env.CRON_SECRET}`));
     assert.equal(result.status, 200);
-    assert.deepEqual(await result.json(), { ok: true, enabled: true, processed: 3, sent: 1, retry: 1, needsReview: 1 });
+    assert.deepEqual(await result.json(), { ok: true, enabled: true, processed: 3, sent: 1, retry: 1, needsReview: 1, notificationTests: { processed: 0, sent: 0, needsReview: 0 } });
     assert.deepEqual(completed.sort(), ["needs_review", "retry", "sent"]);
   } finally { global.fetch = originalFetch; delete process.env.ENTRY_EMAIL_ENABLED; }
 });

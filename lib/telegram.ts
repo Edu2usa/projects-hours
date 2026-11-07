@@ -2,14 +2,15 @@ import { formatDisplayDate, isInPeriod, latestFridayPayrollPeriod } from "./payr
 import type { AppState } from "./app-state";
 import type { Account, Employee, JobEntry, Service, WorkerLine } from "./types";
 
-type TelegramResult = {
+export type TelegramResult = {
   chatId: string;
   ok: boolean;
   status?: number;
+  messageId?: number;
   error?: string;
 };
 
-export async function sendTelegramMessage(text: string, chatIds = telegramChatIds("entry")) {
+export async function sendTelegramMessage(text: string, chatIds = telegramChatIds("entry"), captureReceipt = false) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token || chatIds.length === 0) {
     return { configured: false, results: [] as TelegramResult[] };
@@ -19,6 +20,7 @@ export async function sendTelegramMessage(text: string, chatIds = telegramChatId
     try {
       const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: "POST",
+        ...(captureReceipt ? { signal: AbortSignal.timeout(20_000), redirect: "error" as const } : {}),
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           chat_id: chatId,
@@ -26,9 +28,19 @@ export async function sendTelegramMessage(text: string, chatIds = telegramChatId
           disable_web_page_preview: true
         })
       });
+      if (captureReceipt) {
+        // The test distinguishes API acceptance from an HTTP 200/error body.
+        // Keep only message IDs, never provider text or returned user/chat data.
+        const data = await response.json().catch(() => null);
+        const messageId = data?.result?.message_id;
+        const accepted = response.ok && data?.ok === true && Number.isSafeInteger(messageId) && messageId > 0;
+        return accepted
+          ? { chatId, ok: true, status: response.status, messageId: messageId as number }
+          : { chatId, ok: false, status: response.status, error: "telegram_receipt_unconfirmed" };
+      }
       return { chatId, ok: response.ok, status: response.status };
     } catch (error) {
-      return { chatId, ok: false, error: error instanceof Error ? error.message : String(error) };
+      return { chatId, ok: false, error: captureReceipt ? "telegram_transport_error" : error instanceof Error ? error.message : String(error) };
     }
   }));
 
